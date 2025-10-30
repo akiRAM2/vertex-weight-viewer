@@ -49,9 +49,9 @@ A Blender addon that displays vertex group weights as numerical overlays in weig
 
 ## License / ライセンス
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 or later - see the [LICENSE](LICENSE) file for details.
 
-このプロジェクトはMITライセンスの下でライセンスされています - 詳細は [LICENSE](LICENSE) ファイルをご覧ください。
+このプロジェクトはGNU General Public License v3.0以降の下でライセンスされています - 詳細は [LICENSE](LICENSE) ファイルをご覧ください。
 
 ## Contributing / コントリビューション
 

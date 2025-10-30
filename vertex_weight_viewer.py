@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Weight Viewer",
     "author": "copilot, akiRAM2",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Item > Weight Viewer",
     "description": "Advanced vertex weight overlay with dual display, individual customization, and auto-activation for Weight Paint and Edit modes.",
@@ -9,7 +9,7 @@ bl_info = {
     "doc_url": "",
     "category": "3D View",
     "support": "COMMUNITY",
-    "license": "MIT",
+    "license": "GPL-3.0-or-later",
 }
 
 import bpy

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2025-10-31
+
+### 📄 License Compliance
+- **GPL v3.0+ License**: Changed from MIT to GNU General Public License v3.0 or later
+- **Updated Documentation**: License information updated in all relevant files
+
 ## [1.3.0] - 2025-10-30
 
 ### 🎉 Major Features
