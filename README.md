@@ -1,15 +1,15 @@
 # Vertex Weight Viewer / 頂点ウェイトビューワー
 
-A Blender addon that displays vertex group weights as numerical overlays in weight paint mode.
+A Blender addon that displays vertex group weights as numerical overlays in weight paint and edit modes.
 
-ウェイトペイントモード中に、頂点グループのウェイト値を数値オーバーレイとして表示するBlenderアドオンです。
+ウェイトペイントモードとEditモード中に、頂点グループのウェイト値を数値オーバーレイとして表示するBlenderアドオンです。
 
 ## Features / 機能
 
 - Real-time display of vertex weights as text overlays / 頂点ウェイトのリアルタイム数値表示
 - Customizable font size and color / フォントサイズと色のカスタマイズ
 - Easy toggle on/off functionality / 簡単なオン/オフ切り替え機能
-- Works seamlessly with Blender's weight paint mode / Blenderのウェイトペイントモードとシームレスに連携
+- Works seamlessly with Blender's weight paint and edit modes / BlenderのウェイトペイントモードとEditモードでシームレスに動作
 
 ## Installation / インストール
 
@@ -25,7 +25,7 @@ A Blender addon that displays vertex group weights as numerical overlays in weig
 ## Usage / 使用方法
 
 1. Select a mesh object with vertex groups / 頂点グループを持つメッシュオブジェクトを選択
-2. Enter Weight Paint mode / ウェイトペイントモードに入る
+2. Enter Weight Paint or Edit mode / ウェイトペイントモードまたはEditモードに入る
 3. Open the sidebar (N key) and find the "Weight Viewer" panel / サイドバー（Nキー）を開いて「Weight Viewer」パネルを探す
 4. Toggle "Show Overlay" to display vertex weights / 「Show Overlay」をオンにして頂点ウェイトを表示
 5. Adjust font size and color as needed / 必要に応じてフォントサイズと色を調整

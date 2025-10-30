@@ -1,10 +1,10 @@
 bl_info = {
     "name": "Vertex Weight Viewer",
     "author": "copilot, akiRAM2",
-    "version": (1, 1, 2),
+    "version": (1, 2, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Weight Viewer",
-    "description": "Show active vertex group weights as overlay in weight paint mode. Toggle with UI panel.",
+    "description": "Show active vertex group weights as overlay in weight paint and edit modes. Toggle with UI panel.",
     "warning": "",
     "doc_url": "",
     "category": "3D View",
@@ -21,15 +21,23 @@ _handle = None
 
 def draw_callback_px(self, context):
     obj = context.active_object
-    if not obj or obj.mode != 'WEIGHT_PAINT':
+    if not obj or obj.mode not in ['WEIGHT_PAINT', 'EDIT'] or obj.type != 'MESH':
         return
     vg = obj.vertex_groups.active
     if not vg:
         return
 
-    depsgraph = context.evaluated_depsgraph_get()
-    eval_obj = obj.evaluated_get(depsgraph)
-    mesh = eval_obj.data
+    # Editモードとウェイトペイントモードで異なるアプローチ
+    if obj.mode == 'EDIT':
+        # Editモードでは元のメッシュデータを直接使用
+        mesh = obj.data
+        matrix_world = obj.matrix_world
+    else:
+        # ウェイトペイントモードでは評価されたメッシュを使用
+        depsgraph = context.evaluated_depsgraph_get()
+        eval_obj = obj.evaluated_get(depsgraph)
+        mesh = eval_obj.data
+        matrix_world = eval_obj.matrix_world
 
     region = context.region
     rv3d = context.region_data
@@ -40,15 +48,21 @@ def draw_callback_px(self, context):
     font_id = 0
     blf.size(font_id, context.window_manager.weight_overlay_font_size)
 
+    # バーテックスグループのインデックスを取得
+    vg_index = vg.index
+    
     for v in mesh.vertices:
-        try:
-            w = vg.weight(v.index)
-        except RuntimeError:
-            w = 0.0
+        # バーテックスグループの重みを取得
+        w = 0.0
+        for group in v.groups:
+            if group.group == vg_index:
+                w = group.weight
+                break
+        
         if w == 0.0:
             continue
 
-        co_world = eval_obj.matrix_world @ v.co
+        co_world = matrix_world @ v.co
         co_2d = bpy_extras.view3d_utils.location_3d_to_region_2d(region, rv3d, co_world)
         if co_2d:
             color = context.window_manager.weight_overlay_color
