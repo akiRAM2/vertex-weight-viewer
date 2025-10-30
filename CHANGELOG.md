@@ -2,20 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.1] - 2025-10-30
+## [1.3.0] - 2025-10-30
 
-### Fixed
-- Improved Edit mode compatibility by using different mesh data access methods
-- Fixed vertex group weight access in Edit mode using vertex.groups instead of vg.weight()
+### 🎉 Major Features
+- **Dual Display System**: Shows both active vertex group weight (large, top) and total weight (small, bottom) simultaneously
+- **Multi-Mode Support**: Works seamlessly in both Weight Paint and Edit modes
+- **Individual Customization**: Separate font sizes and colors for each display type
+- **Auto-Display**: Automatically shows overlay when Blender starts or files are loaded
 
-## [1.2.0] - 2025-10-30
+### 🎨 Display & UI
+- **Smart Layout**: Active Vertex Group (14px, yellow) prioritized above Total Weight (12px, cyan)  
+- **Item Tab Integration**: Located in standard "Item" tab for better Blender workflow integration
+- **Smart Panel Visibility**: Appears only when mesh objects with vertex groups are selected
+- **Organized Controls**: Dedicated sections for Font Sizes and Colors with clear labels
 
-### Added
-- Support for Edit mode in addition to Weight Paint mode
-- Vertex weights are now visible in both Weight Paint and Edit modes
+### 🔧 Technical Improvements
+- **Robust Auto-Activation**: Multiple handlers ensure reliable display across Blender sessions
+- **Enhanced Edit Mode**: Improved mesh data access for seamless compatibility
+- **Performance Optimized**: Shows only non-zero values for clean visualization
+- **Blender Standards**: Follows UI conventions for object-specific tools
 
-### Changed
-- Updated description to reflect new Edit mode support
+### 📋 Requirements
+- Blender 4.0 or later
+- Mesh objects with vertex groups
+
+### 🚀 Quick Start
+1. Install addon and enable in Preferences
+2. Select mesh with vertex groups → Enter Weight Paint or Edit mode
+3. Find "Weight Viewer" panel in N-panel → Item tab
+4. Customize colors and font sizes as needed
 
 ## [1.1.2] - 2025-10-30
 
