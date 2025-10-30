@@ -1,5 +1,7 @@
 # Vertex Weight Viewer / 頂点ウェイトビューワー
 
+<img width="795" height="534" alt="image" src="https://github.com/user-attachments/assets/444f6da4-e39b-4b65-bf08-f11a1e847073" />
+
 A Blender addon that displays vertex group weights as numerical overlays in weight paint and edit modes.
 
 ウェイトペイントモードとEditモード中に、頂点グループのウェイト値を数値オーバーレイとして表示するBlenderアドオンです。
