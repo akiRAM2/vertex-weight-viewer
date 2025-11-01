@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Weight Viewer",
     "author": "copilot, akiRAM2",
-    "version": (1, 3, 1),
+    "version": (1, 4, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Item > Weight Viewer",
     "description": "Advanced vertex weight overlay with dual display, individual customization, and auto-activation for Weight Paint and Edit modes.",
@@ -62,8 +62,9 @@ def draw_callback_px(self, context):
         # 全ての頂点グループのウェイト合計
         total_weight = sum(group.weight for group in v.groups)
         
-        # 少なくとも一つが0より大きい場合のみ表示
-        if total_weight == 0.0 and active_weight == 0.0:
+        # 表示条件をチェック
+        show_total = context.window_manager.show_total_weight
+        if active_weight == 0.0 and (not show_total or total_weight == 0.0):
             continue
 
         co_world = matrix_world @ v.co
@@ -77,8 +78,8 @@ def draw_callback_px(self, context):
                 blf.position(font_id, co_2d.x, co_2d.y, 0)
                 blf.draw(font_id, f"{active_weight:.2f}")
             
-            # Total Weightを小さく下に表示
-            if total_weight > 0.0:
+            # Total Weightを小さく下に表示（Show Total Weightがオンの場合のみ）
+            if context.window_manager.show_total_weight and total_weight > 0.0:
                 total_font_size = context.window_manager.weight_overlay_total_font_size
                 blf.size(font_id, total_font_size)
                 blf.color(font_id, *context.window_manager.weight_overlay_total_color)
@@ -107,17 +108,23 @@ class VIEW3D_PT_weight_overlay(bpy.types.Panel):
         if wm.show_weight_overlay:
             layout.separator()
             
+            # Total Weight表示切り替え
+            layout.prop(wm, "show_total_weight", text="Show Total Weight")
+            layout.separator()
+            
             # フォントサイズ設定セクション
             box = layout.box()
             box.label(text="Font Sizes:")
             box.prop(wm, "weight_overlay_font_size", text="Active Vertex Group Size")
-            box.prop(wm, "weight_overlay_total_font_size", text="Total Weight Size")
+            if wm.show_total_weight:
+                box.prop(wm, "weight_overlay_total_font_size", text="Total Weight Size")
             
             # カラー設定セクション
             box = layout.box()
             box.label(text="Colors:")
             box.prop(wm, "weight_overlay_color", text="Active Vertex Group Color")
-            box.prop(wm, "weight_overlay_total_color", text="Total Weight Color")
+            if wm.show_total_weight:
+                box.prop(wm, "weight_overlay_total_color", text="Total Weight Color")
 
 def register_draw_handler():
     global _handle
@@ -188,6 +195,11 @@ def register():
         default=(0.0, 1.0, 1.0, 1.0),
         min=0.0, max=1.0, size=4, subtype='COLOR'
     )
+    bpy.types.WindowManager.show_total_weight = bpy.props.BoolProperty(
+        name="Show Total Weight",
+        description="Display total weight sum below active vertex group weight",
+        default=True
+    )
 
     # デフォルト値を確実に設定（既存の設定がある場合も更新）
     wm = bpy.context.window_manager
@@ -216,6 +228,7 @@ def unregister():
     del bpy.types.WindowManager.weight_overlay_total_font_size
     del bpy.types.WindowManager.weight_overlay_color
     del bpy.types.WindowManager.weight_overlay_total_color
+    del bpy.types.WindowManager.show_total_weight
     bpy.utils.unregister_class(VIEW3D_PT_weight_overlay)
 
 if __name__ == "__main__":

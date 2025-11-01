@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2025-11-01
+
+### 🎛️ Enhanced Control Options
+- **Total Weight Toggle**: Added "Show Total Weight" checkbox to enable/disable total weight display
+- **Smart UI Layout**: Total Weight options (font size and color) only appear when toggle is enabled
+- **Flexible Display**: Can now show only Active Vertex Group weights or both displays simultaneously
+- **Improved User Control**: Better customization for different workflow needs
+
 ## [1.3.1] - 2025-10-31
 
 ### 📄 License Compliance
