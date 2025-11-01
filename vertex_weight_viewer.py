@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Weight Viewer",
     "author": "copilot, akiRAM2",
-    "version": (1, 7, 0),
+    "version": (1, 6, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Item > Weight Viewer",
     "description": "Advanced vertex weight overlay with dual display, individual customization, and auto-activation for Weight Paint and Edit modes. Compatible with Blender 4.0+ and 5.0+.",
@@ -38,7 +38,6 @@ except ImportError:
 
 _handle = None
 _cached_draw_data = None
-_blink_timer = 0.0
 
 def update_draw_data():
     """Update cached drawing data from current context (call this outside draw phase)."""
@@ -58,12 +57,10 @@ def update_draw_data():
             'vg_index': obj.vertex_groups.active.index if obj.vertex_groups.active else None,
             'show_overlay': context.window_manager.show_weight_overlay if hasattr(context.window_manager, 'show_weight_overlay') else False,
             'show_total_weight': context.window_manager.show_total_weight if hasattr(context.window_manager, 'show_total_weight') else False,
-            'blink_overweight': getattr(context.window_manager, 'weight_overlay_blink_overweight', True),
             'font_size': getattr(context.window_manager, 'weight_overlay_font_size', 14),
             'total_font_size': getattr(context.window_manager, 'weight_overlay_total_font_size', 12),
             'color': getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0)),
             'total_color': getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0)),
-            'overweight_color': (1.0, 0.0, 0.0, 1.0),  # 赤色
         }
         
     except (AttributeError, TypeError):
@@ -321,27 +318,18 @@ def draw_callback_px(*args):
         if _cached_draw_data is not None:
             vg_index = _cached_draw_data['vg_index']
             show_total_weight = _cached_draw_data['show_total_weight']
-            blink_overweight = _cached_draw_data['blink_overweight']
             font_size = _cached_draw_data['font_size']
             total_font_size = _cached_draw_data['total_font_size']
             color = _cached_draw_data['color']
             total_color = _cached_draw_data['total_color']
-            overweight_color = _cached_draw_data['overweight_color']
         else:
             vg = obj.vertex_groups.active
             vg_index = vg.index if vg else None
             show_total_weight = getattr(context.window_manager, 'show_total_weight', False)
-            blink_overweight = getattr(context.window_manager, 'weight_overlay_blink_overweight', True)
             font_size = getattr(context.window_manager, 'weight_overlay_font_size', 14)
             total_font_size = getattr(context.window_manager, 'weight_overlay_total_font_size', 12)
             color = getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0))
             total_color = getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0))
-            overweight_color = (1.0, 0.0, 0.0, 1.0)
-        
-        # Update blink timer for overweight display
-        global _blink_timer
-        import time
-        _blink_timer = time.time() * 2.0  # 2Hz blink rate
 
         # Get mesh data
         if obj.mode == 'EDIT':
@@ -418,27 +406,12 @@ def draw_callback_px(*args):
                     
                     # Total Weightを小さく下に表示（Show Total Weightがオンの場合のみ）
                     if show_total_weight and total_weight > 0.0:
-                        # Check if total weight is over 1.0 and blink is enabled
-                        is_overweight = total_weight >= 1.0
-                        should_blink = blink_overweight and is_overweight
-                        
-                        # Calculate blink visibility (50% duty cycle)
-                        blink_visible = True
-                        if should_blink:
-                            blink_visible = (_blink_timer % 1.0) < 0.5
-                        
-                        if blink_visible:
-                            # Use larger font and red color for overweight display
-                            display_font_size = total_font_size + 2 if is_overweight else total_font_size
-                            display_color = overweight_color if is_overweight else total_color
-                            
-                            blf.size(font_id, display_font_size)
-                            blf.color(font_id, *display_color)
-                            
-                            # Active Weightが表示されている場合は、その下に表示
-                            y_offset = -font_size - 2 if (vg_index is not None and active_weight > 0.0) else 0
-                            blf.position(font_id, co_2d.x, co_2d.y + y_offset, 0)
-                            blf.draw(font_id, f"{total_weight:.2f}")
+                        blf.size(font_id, total_font_size)
+                        blf.color(font_id, *total_color)
+                        # Active Weightが表示されている場合は、その下に表示
+                        y_offset = -font_size - 2 if (vg_index is not None and active_weight > 0.0) else 0
+                        blf.position(font_id, co_2d.x, co_2d.y + y_offset, 0)
+                        blf.draw(font_id, f"{total_weight:.2f}")
             except Exception as e:
                 print(f"Vertex Weight Viewer: Error processing vertex {v.index}: {type(e).__name__}: {str(e)}")
                 continue
@@ -480,11 +453,6 @@ class VIEW3D_PT_weight_overlay(Panel):
             
             # Total Weight表示切り替え
             layout.prop(wm, "show_total_weight", text="Show Total Weight")
-            
-            # Overweight点滅機能切り替え
-            if wm.show_total_weight:
-                layout.prop(wm, "weight_overlay_blink_overweight", text="Blink Overweight (≥1.0)")
-            
             layout.separator()
             
             # フォントサイズ設定セクション
@@ -624,11 +592,6 @@ def register():
             description="Display total weight sum below active vertex group weight",
             default=True
         )
-        bpy.types.WindowManager.weight_overlay_blink_overweight = BoolProperty(
-            name="Blink Overweight",
-            description="Blink total weight in red when it's 1.0 or higher",
-            default=True
-        )
         print("Vertex Weight Viewer: Properties registered successfully")
 
         # デフォルト値を確実に設定（既存の設定がある場合も更新）
@@ -681,8 +644,6 @@ def unregister():
                 del bpy.types.WindowManager.weight_overlay_total_color
             if hasattr(bpy.types.WindowManager, 'show_total_weight'):
                 del bpy.types.WindowManager.show_total_weight
-            if hasattr(bpy.types.WindowManager, 'weight_overlay_blink_overweight'):
-                del bpy.types.WindowManager.weight_overlay_blink_overweight
             print("Vertex Weight Viewer: Properties removed successfully")
         except Exception as e:
             print(f"Vertex Weight Viewer: Error removing properties: {type(e).__name__}: {str(e)}")

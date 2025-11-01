@@ -2,24 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.7.0] - 2025-11-01
-
-### ✨ New Features
-- **Overweight Alert System**: Total weights ≥1.0 now display in red bold font with blinking animation
-- **Blink Toggle Control**: Added "Blink Overweight (≥1.0)" toggle switch in UI for controlling the alert feature
-- **Enhanced Visual Feedback**: Overweight vertices are highlighted with larger font size and distinctive red coloring
-- **Customizable Alert Timing**: 2Hz blink rate with 50% duty cycle for optimal visibility without distraction
-
-### 🎨 UI Improvements
-- **Conditional Controls**: Overweight blink toggle only appears when "Show Total Weight" is enabled
-- **Intuitive Layout**: Alert controls logically grouped with related weight display options
-- **Smart Defaults**: Overweight blinking enabled by default for immediate feedback on weight issues
-
-### 🔧 Technical Enhancements
-- **Performance Optimized**: Efficient blink timing using system time with minimal performance impact
-- **Cache Integration**: Overweight alert settings properly integrated with draw data caching system
-- **Cross-Version Compatible**: Alert system works seamlessly across Blender 4.0+ and 5.0+ versions
-
 ## [1.6.0] - 2025-11-01
 
 ### 🔧 Critical Blender 5.0.0 Fixes
