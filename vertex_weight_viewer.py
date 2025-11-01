@@ -13,9 +13,15 @@ bl_info = {
 }
 
 import bpy
+from bpy.types import Panel
+from bpy.props import BoolProperty, IntProperty, FloatVectorProperty
 import bpy_extras
+import bpy_extras.view3d_utils
 import gpu
+import blf
 from mathutils import Vector
+import traceback
+import sys
 
 _handle = None
 
@@ -28,9 +34,79 @@ def is_blender_5_or_later():
     """Check if running on Blender 5.0 or later."""
     return get_blender_version() >= (5, 0, 0)
 
+def diagnose_environment():
+    """Diagnose the current Blender environment for compatibility issues."""
+    print("=== Vertex Weight Viewer: Environment Diagnosis ===")
+    print(f"Blender Version: {get_blender_version()}")
+    print(f"Python Version: {sys.version}")
+    print(f"Platform: {sys.platform}")
+    
+    # Check Python modules
+    modules_to_check = [
+        'bpy', 'bpy.types', 'bpy.props', 'bpy_extras', 'bpy_extras.view3d_utils',
+        'mathutils', 'gpu', 'blf', 'traceback'
+    ]
+    
+    for module_name in modules_to_check:
+        try:
+            __import__(module_name)
+            print(f"✓ {module_name}: Available")
+        except ImportError as e:
+            print(f"✗ {module_name}: Missing ({str(e)})")
+        except Exception as e:
+            print(f"⚠ {module_name}: Error ({type(e).__name__}: {str(e)})")
+    
+    print("=== End Diagnosis ===")
+
+def check_import_compatibility():
+    """Check if all required modules can be imported."""
+    missing_modules = []
+    
+    # Check critical Blender modules
+    try:
+        import blf
+    except ImportError:
+        missing_modules.append("blf")
+    
+    try:
+        import gpu
+    except ImportError:
+        missing_modules.append("gpu")
+    
+    try:
+        import bpy_extras.view3d_utils
+    except ImportError:
+        missing_modules.append("bpy_extras.view3d_utils")
+    
+    try:
+        from mathutils import Vector
+    except ImportError:
+        missing_modules.append("mathutils")
+    
+    try:
+        from bpy.types import Panel
+    except ImportError:
+        missing_modules.append("bpy.types")
+    
+    try:
+        from bpy.props import BoolProperty
+    except ImportError:
+        missing_modules.append("bpy.props")
+    
+    if missing_modules:
+        print(f"Vertex Weight Viewer: Missing required modules: {', '.join(missing_modules)}")
+        print("This may indicate an incomplete Blender installation or a non-standard environment.")
+        return False
+    
+    return True
+
 def check_api_compatibility():
     """Check if all required APIs are available for this Blender version."""
     try:
+        # First check if modules can be imported
+        if not check_import_compatibility():
+            return False
+        
         # Test critical imports and API calls
         import blf
         import gpu
@@ -47,7 +123,6 @@ def check_api_compatibility():
     except Exception as e:
         print(f"Vertex Weight Viewer: API compatibility check failed for Blender {get_blender_version()}")
         print(f"Error details: {type(e).__name__}: {str(e)}")
-        import traceback
         print(f"Stack trace: {traceback.format_exc()}")
         return False
 
@@ -76,7 +151,12 @@ def draw_callback_px(self, context):
         if region is None or rv3d is None:
             return
 
-        import blf
+        try:
+            import blf
+        except ImportError:
+            print("Vertex Weight Viewer: blf module not available, cannot draw text")
+            return
+        
         font_id = 0
         blf.size(font_id, context.window_manager.weight_overlay_font_size)
     except Exception as e:
@@ -133,7 +213,7 @@ def draw_callback_px(self, context):
         import traceback
         print(f"Stack trace: {traceback.format_exc()}")
 
-class VIEW3D_PT_weight_overlay(bpy.types.Panel):
+class VIEW3D_PT_weight_overlay(Panel):
     bl_label = "Weight Viewer"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -234,38 +314,40 @@ def register():
         # Check API compatibility
         if not check_api_compatibility():
             print(f"Vertex Weight Viewer: Warning - Running on Blender {get_blender_version()}, some features may not work correctly.")
+            print("Running environment diagnosis...")
+            diagnose_environment()
         
         bpy.utils.register_class(VIEW3D_PT_weight_overlay)
         print("Vertex Weight Viewer: UI panel registered successfully")
         
-        bpy.types.WindowManager.show_weight_overlay = bpy.props.BoolProperty(
+        bpy.types.WindowManager.show_weight_overlay = BoolProperty(
             name="Show Weight Overlay",
             default=True,
             update=update_show_weight_overlay
         )
-        bpy.types.WindowManager.weight_overlay_font_size = bpy.props.IntProperty(
+        bpy.types.WindowManager.weight_overlay_font_size = IntProperty(
             name="Active Vertex Group Font Size", 
             description="Font size for active vertex group weight display",
             default=14, min=8, max=64
         )
-        bpy.types.WindowManager.weight_overlay_total_font_size = bpy.props.IntProperty(
+        bpy.types.WindowManager.weight_overlay_total_font_size = IntProperty(
             name="Total Weight Font Size",
             description="Font size for total weight sum display", 
             default=12, min=8, max=64
         )
-        bpy.types.WindowManager.weight_overlay_color = bpy.props.FloatVectorProperty(
+        bpy.types.WindowManager.weight_overlay_color = FloatVectorProperty(
             name="Active Vertex Group Color",
             description="Color for active vertex group weight display",
             default=(1.0, 1.0, 0.0, 1.0),
             min=0.0, max=1.0, size=4, subtype='COLOR'
         )
-        bpy.types.WindowManager.weight_overlay_total_color = bpy.props.FloatVectorProperty(
+        bpy.types.WindowManager.weight_overlay_total_color = FloatVectorProperty(
             name="Total Weight Color",
             description="Color for total weight sum display",
             default=(0.0, 1.0, 1.0, 1.0),
             min=0.0, max=1.0, size=4, subtype='COLOR'
         )
-        bpy.types.WindowManager.show_total_weight = bpy.props.BoolProperty(
+        bpy.types.WindowManager.show_total_weight = BoolProperty(
             name="Show Total Weight",
             description="Display total weight sum below active vertex group weight",
             default=True
@@ -340,4 +422,9 @@ def unregister():
         print(f"Stack trace: {traceback.format_exc()}")
 
 if __name__ == "__main__":
-    register()
+    try:
+        register()
+    except Exception as e:
+        print(f"Vertex Weight Viewer: Failed to register addon: {type(e).__name__}: {str(e)}")
+        print("This may indicate missing Blender modules or an incompatible environment.")
+        print(f"Stack trace: {traceback.format_exc()}")
