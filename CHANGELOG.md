@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 - **Handler Registration**: Enhanced draw handler registration with proper version-specific argument handling
 - **Module Loading Safety**: Improved safe module loading with better error handling for missing dependencies
 
+### 🛠️ Dependency Resolution & Compatibility
+- **Lazy Weight Tool Integration**: Added detection and compatibility with Lazy Weight Tool addon
+- **Runtime Module Resolution**: Dynamic module availability checking during addon operation
+- **Missing Library Diagnostics**: Comprehensive diagnostic tools to identify missing dependencies
+- **Interactive Diagnosis**: Built-in UI diagnostic button for troubleshooting compatibility issues
+- **Environment Status Display**: Real-time status display of module availability in the UI
+
 ### ✨ Enhanced Cross-Version Support
 - **Seamless Operation**: Automatic detection and handling of API differences between Blender 4.0+ through 5.0+
 - **Robust Error Recovery**: Enhanced error recovery and diagnostic capabilities for troubleshooting compatibility issues
@@ -21,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - **Draw Callback Arguments**: Corrected callback function signature compatibility between versions
 - **Handler Parameter Mismatch**: Resolved parameter count mismatches in draw handler registration
 - **Import Compatibility**: Fixed module import issues that affected certain Blender environments
+- **Co-existence with Other Addons**: Improved compatibility when running alongside other weight-related addons
 
 ## [1.5.0] - 2025-11-01
 

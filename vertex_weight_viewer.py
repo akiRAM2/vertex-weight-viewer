@@ -36,6 +36,45 @@ except ImportError:
     BLF_AVAILABLE = False
     print("Vertex Weight Viewer: BLF module not available")
 
+def check_lazy_weight_tool():
+    """Check if Lazy Weight Tool is installed and active."""
+    try:
+        addon_modules = bpy.context.preferences.addons
+        for addon in addon_modules:
+            if "lazy" in addon.module.lower() and "weight" in addon.module.lower():
+                return True
+        return False
+    except:
+        return False
+
+def ensure_required_modules():
+    """Ensure all required modules are available, attempting to resolve missing dependencies."""
+    global GPU_AVAILABLE, BLF_AVAILABLE
+    
+    # Try to import again in case other addons have made modules available
+    if not GPU_AVAILABLE:
+        try:
+            import gpu
+            GPU_AVAILABLE = True
+            print("Vertex Weight Viewer: GPU module now available")
+        except ImportError:
+            pass
+    
+    if not BLF_AVAILABLE:
+        try:
+            import blf
+            BLF_AVAILABLE = True
+            print("Vertex Weight Viewer: BLF module now available")
+        except ImportError:
+            pass
+    
+    # Check if we have Lazy Weight Tool which might provide missing modules
+    has_lazy_weight = check_lazy_weight_tool()
+    if has_lazy_weight:
+        print("Vertex Weight Viewer: Lazy Weight Tool detected, attempting module resolution...")
+    
+    return BLF_AVAILABLE  # BLF is critical for text rendering
+
 _handle = None
 
 # Blender version compatibility utilities
@@ -54,20 +93,41 @@ def diagnose_environment():
     print(f"Python Version: {sys.version}")
     print(f"Platform: {sys.platform}")
     
+    # Check for installed addons (especially Lazy Weight Tool)
+    print("--- Installed Addons ---")
+    addon_modules = bpy.context.preferences.addons
+    for addon in addon_modules:
+        if "weight" in addon.module.lower() or "lazy" in addon.module.lower():
+            print(f"✓ Weight-related addon found: {addon.module}")
+    
     # Check Python modules
     modules_to_check = [
         'bpy', 'bpy.types', 'bpy.props', 'bpy_extras', 'bpy_extras.view3d_utils',
         'mathutils', 'gpu', 'blf', 'traceback'
     ]
     
+    print("--- Core Blender Modules ---")
     for module_name in modules_to_check:
         try:
-            __import__(module_name)
-            print(f"✓ {module_name}: Available")
+            module = __import__(module_name)
+            module_path = getattr(module, '__file__', 'Built-in')
+            print(f"✓ {module_name}: Available ({module_path})")
         except ImportError as e:
             print(f"✗ {module_name}: Missing ({str(e)})")
         except Exception as e:
             print(f"⚠ {module_name}: Error ({type(e).__name__}: {str(e)})")
+    
+    # Check GPU and BLF specific availability
+    print("--- Graphics Modules ---")
+    print(f"GPU Module Available: {GPU_AVAILABLE}")
+    print(f"BLF Module Available: {BLF_AVAILABLE}")
+    
+    # Check sys.path for additional module paths
+    print("--- Python Module Paths ---")
+    for i, path in enumerate(sys.path[:5]):  # Show first 5 paths
+        print(f"  {i}: {path}")
+    if len(sys.path) > 5:
+        print(f"  ... and {len(sys.path) - 5} more paths")
     
     # Check specific Blender 5.0 compatibility issues
     if is_blender_5_or_later():
@@ -84,6 +144,23 @@ def diagnose_environment():
             print("✓ Draw handler: Compatible with Blender 5.0+ signature")
         except Exception as e:
             print(f"✗ Draw handler: Incompatible ({type(e).__name__}: {str(e)})")
+    
+    # Test GPU and BLF functionality if available
+    print("--- Functionality Tests ---")
+    if BLF_AVAILABLE:
+        try:
+            import blf
+            blf.size(0, 12)
+            print("✓ BLF: Basic text rendering functions available")
+        except Exception as e:
+            print(f"✗ BLF: Function test failed ({type(e).__name__}: {str(e)})")
+    
+    if GPU_AVAILABLE:
+        try:
+            import gpu
+            print("✓ GPU: Module imported successfully")
+        except Exception as e:
+            print(f"✗ GPU: Import test failed ({type(e).__name__}: {str(e)})")
     
     print("=== End Diagnosis ===")
 
@@ -210,6 +287,16 @@ def draw_callback_px(*args):
         if region is None or rv3d is None:
             return
 
+        # Re-check BLF availability (in case it became available after registration)
+        global BLF_AVAILABLE
+        if not BLF_AVAILABLE:
+            try:
+                import blf
+                BLF_AVAILABLE = True
+                print("Vertex Weight Viewer: BLF module became available during runtime")
+            except ImportError:
+                pass
+        
         if not BLF_AVAILABLE:
             # BLF module is not available, cannot draw text
             return
@@ -270,6 +357,21 @@ def draw_callback_px(*args):
         import traceback
         print(f"Stack trace: {traceback.format_exc()}")
 
+class VERTEX_WEIGHT_VIEWER_OT_diagnose(bpy.types.Operator):
+    """Run diagnostic check for Vertex Weight Viewer compatibility"""
+    bl_idname = "vertex_weight_viewer.diagnose"
+    bl_label = "Run Diagnostic"
+    bl_options = {'REGISTER'}
+    
+    def execute(self, context):
+        # Ensure modules are re-checked
+        ensure_required_modules()
+        # Run full diagnosis
+        diagnose_environment()
+        
+        self.report({'INFO'}, "Diagnostic complete. Check console for details.")
+        return {'FINISHED'}
+
 class VIEW3D_PT_weight_overlay(Panel):
     bl_label = "Weight Viewer"
     bl_space_type = 'VIEW_3D'
@@ -286,6 +388,17 @@ class VIEW3D_PT_weight_overlay(Panel):
         layout = self.layout
         wm = context.window_manager
         layout.prop(wm, "show_weight_overlay", text="Show Overlay")
+        
+        # Display module availability status
+        if not BLF_AVAILABLE:
+            box = layout.box()
+            box.alert = True
+            box.label(text="⚠ Text rendering unavailable", icon='ERROR')
+            box.label(text="BLF module missing")
+            if check_lazy_weight_tool():
+                box.label(text="Try restarting Blender")
+            else:
+                box.operator("wm.console_toggle", text="Run Diagnosis", icon='CONSOLE')
         
         if wm.show_weight_overlay:
             layout.separator()
@@ -307,6 +420,21 @@ class VIEW3D_PT_weight_overlay(Panel):
             box.prop(wm, "weight_overlay_color", text="Active Vertex Group Color")
             if wm.show_total_weight:
                 box.prop(wm, "weight_overlay_total_color", text="Total Weight Color")
+        
+        # Diagnostic section
+        layout.separator()
+        box = layout.box()
+        box.label(text="Diagnostics:")
+        row = box.row()
+        row.operator("vertex_weight_viewer.diagnose", text="Run Diagnosis", icon='CONSOLE')
+        
+        # Show current status
+        status_box = box.box()
+        status_box.label(text=f"Blender: {'.'.join(map(str, get_blender_version()))}")
+        status_box.label(text=f"BLF: {'✓' if BLF_AVAILABLE else '✗'}")
+        status_box.label(text=f"GPU: {'✓' if GPU_AVAILABLE else '✗'}")
+        if check_lazy_weight_tool():
+            status_box.label(text="Lazy Weight Tool: ✓", icon='CHECKMARK')
 
 def register_draw_handler():
     global _handle
@@ -376,14 +504,25 @@ def register():
     try:
         print(f"Vertex Weight Viewer: Starting registration for Blender {get_blender_version()}")
         
+        # Ensure required modules are available
+        modules_available = ensure_required_modules()
+        if not modules_available:
+            print("Vertex Weight Viewer: Critical modules missing!")
+            print("If you have Lazy Weight Tool installed, try restarting Blender.")
+            diagnose_environment()
+            
+            # Still register the addon but warn about limited functionality
+            print("Vertex Weight Viewer: Continuing with limited functionality...")
+        
         # Check API compatibility
         if not check_api_compatibility():
             print(f"Vertex Weight Viewer: Warning - Running on Blender {get_blender_version()}, some features may not work correctly.")
             print("Running environment diagnosis...")
             diagnose_environment()
         
+        bpy.utils.register_class(VERTEX_WEIGHT_VIEWER_OT_diagnose)
         bpy.utils.register_class(VIEW3D_PT_weight_overlay)
-        print("Vertex Weight Viewer: UI panel registered successfully")
+        print("Vertex Weight Viewer: UI classes registered successfully")
         
         bpy.types.WindowManager.show_weight_overlay = BoolProperty(
             name="Show Weight Overlay",
@@ -476,9 +615,10 @@ def unregister():
         # UIクラスを削除
         try:
             bpy.utils.unregister_class(VIEW3D_PT_weight_overlay)
-            print("Vertex Weight Viewer: UI panel unregistered successfully")
+            bpy.utils.unregister_class(VERTEX_WEIGHT_VIEWER_OT_diagnose)
+            print("Vertex Weight Viewer: UI classes unregistered successfully")
         except Exception as e:
-            print(f"Vertex Weight Viewer: Error unregistering UI panel: {type(e).__name__}: {str(e)}")
+            print(f"Vertex Weight Viewer: Error unregistering UI classes: {type(e).__name__}: {str(e)}")
         
         print("Vertex Weight Viewer: Unregistration completed")
     except Exception as e:
