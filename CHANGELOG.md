@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2025-11-01
+
+### 🔧 Critical Blender 5.0.0 Fixes
+- **Draw Callback Compatibility**: Complete overhaul of draw callback system for Blender 5.0.0 compatibility
+- **Function Signature Fix**: Fixed draw callback function to handle different argument patterns between Blender 4.x and 5.0+
+- **Handler Registration**: Enhanced draw handler registration with proper version-specific argument handling
+- **Module Loading Safety**: Improved safe module loading with better error handling for missing dependencies
+
+### ✨ Enhanced Cross-Version Support
+- **Seamless Operation**: Automatic detection and handling of API differences between Blender 4.0+ through 5.0+
+- **Robust Error Recovery**: Enhanced error recovery and diagnostic capabilities for troubleshooting compatibility issues
+- **Safe Import System**: Improved import safety with graceful degradation when optional modules are unavailable
+- **Version-Specific Logic**: Smart handling of version-specific API requirements and limitations
+
+### 🐛 Resolved Issues
+- **5.0.0 Registration Failures**: Fixed addon registration failures specific to Blender 5.0.0
+- **Draw Callback Arguments**: Corrected callback function signature compatibility between versions
+- **Handler Parameter Mismatch**: Resolved parameter count mismatches in draw handler registration
+- **Import Compatibility**: Fixed module import issues that affected certain Blender environments
+
 ## [1.5.0] - 2025-11-01
 
 ### 🚀 Blender 5.0 Compatibility
