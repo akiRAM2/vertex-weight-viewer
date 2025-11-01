@@ -48,7 +48,7 @@ A Blender addon that displays vertex group weights as numerical overlays in weig
 
 ## Requirements / 動作環境
 
-- Blender 4.0 or later / Blender 4.0以降
+- Blender 4.0 or later (including 5.0+) / Blender 4.0以降（5.0+を含む）
 
 ## License / ライセンス
 

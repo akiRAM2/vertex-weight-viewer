@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2025-11-01
+
+### 🚀 Blender 5.0 Compatibility
+- **Major Update**: Added full Blender 5.0 support while maintaining backward compatibility
+- **Version Detection**: Added automatic Blender version checking system
+- **API Validation**: Implements startup compatibility checks for critical APIs
+- **Enhanced Error Handling**: Comprehensive error logging and exception handling throughout
+- **Future-Proof**: Designed to adapt to API changes in Blender 5.x series
+
+### 🛠️ Robust Error Handling
+- **Detailed Logging**: Added comprehensive error messages with exception types and stack traces
+- **Graceful Degradation**: Functions continue to work even when individual components fail
+- **Debug Information**: Registration/unregistration process now provides detailed status messages
+- **Safe Operations**: All critical operations wrapped in try-catch blocks with proper cleanup
+- **Developer Tools**: Enhanced debugging information for troubleshooting compatibility issues
+
+### 🔧 Technical Improvements
+- **Smart Compatibility**: Automatic detection of Blender 4.0+ vs 5.0+ environments
+- **Robust Initialization**: Enhanced startup sequence with compatibility validation
+- **Developer Tools**: Added utility functions for version checking and API testing
+- **Improved Logging**: Better error reporting for debugging compatibility issues
+
+### 📋 Updated Requirements
+- **Extended Support**: Blender 4.0 or later (including 5.0+)
+- **Backward Compatibility**: Existing Blender 4.x installations continue to work seamlessly
+
 ## [1.4.0] - 2025-11-01
 
 ### 🎛️ Enhanced Control Options
