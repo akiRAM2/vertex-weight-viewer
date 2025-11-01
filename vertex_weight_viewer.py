@@ -36,6 +36,36 @@ except ImportError:
     BLF_AVAILABLE = False
     print("Vertex Weight Viewer: BLF module not available")
 
+_handle = None
+_cached_draw_data = None
+
+def update_draw_data():
+    """Update cached drawing data from current context (call this outside draw phase)."""
+    global _cached_draw_data
+    try:
+        context = bpy.context
+        obj = context.active_object
+        
+        if not obj or obj.mode not in ['WEIGHT_PAINT', 'EDIT'] or obj.type != 'MESH':
+            _cached_draw_data = None
+            return
+        
+        # Cache necessary data for drawing
+        _cached_draw_data = {
+            'obj': obj,
+            'mode': obj.mode,
+            'vg_index': obj.vertex_groups.active.index if obj.vertex_groups.active else None,
+            'show_overlay': context.window_manager.show_weight_overlay if hasattr(context.window_manager, 'show_weight_overlay') else False,
+            'show_total_weight': context.window_manager.show_total_weight if hasattr(context.window_manager, 'show_total_weight') else False,
+            'font_size': getattr(context.window_manager, 'weight_overlay_font_size', 14),
+            'total_font_size': getattr(context.window_manager, 'weight_overlay_total_font_size', 12),
+            'color': getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0)),
+            'total_color': getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0)),
+        }
+        
+    except (AttributeError, TypeError):
+        _cached_draw_data = None
+
 def check_lazy_weight_tool():
     """Check if Lazy Weight Tool is installed and active."""
     try:
@@ -252,65 +282,101 @@ def check_api_compatibility():
 def draw_callback_px(*args):
     """
     Draw callback function compatible with both Blender 4.x and 5.0+.
-    In Blender 5.0+, callbacks receive no arguments.
-    In Blender 4.x, callbacks receive (self, context).
+    Uses cached data to avoid context access issues in Blender 5.0+.
     """
     try:
-        # Get context in a version-compatible way
-        if len(args) >= 2:
-            # Blender 4.x style: (self, context)
-            context = args[1]
+        global _cached_draw_data
+        
+        # Use cached data if available (for Blender 5.0+ compatibility)
+        if _cached_draw_data is None:
+            # Try to get context for Blender 4.x
+            context = None
+            if len(args) >= 2:
+                context = args[1]
+            elif hasattr(bpy, 'context'):
+                try:
+                    context = bpy.context
+                    # Test if context is accessible
+                    _ = context.active_object
+                except (AttributeError, TypeError):
+                    # Context is restricted, skip drawing
+                    return
+            
+            if context is None:
+                return
+            
+            obj = context.active_object
+            if not obj or obj.mode not in ['WEIGHT_PAINT', 'EDIT'] or obj.type != 'MESH':
+                return
         else:
-            # Blender 5.0+ style: no arguments, get context from bpy
-            context = bpy.context
+            # Use cached data
+            obj = _cached_draw_data['obj']
+            if not _cached_draw_data['show_overlay']:
+                return
         
-        obj = context.active_object
-        if not obj or obj.mode not in ['WEIGHT_PAINT', 'EDIT'] or obj.type != 'MESH':
-            return
-        
-        vg = obj.vertex_groups.active
+        # Get drawing parameters from cached data or context
+        if _cached_draw_data is not None:
+            vg_index = _cached_draw_data['vg_index']
+            show_total_weight = _cached_draw_data['show_total_weight']
+            font_size = _cached_draw_data['font_size']
+            total_font_size = _cached_draw_data['total_font_size']
+            color = _cached_draw_data['color']
+            total_color = _cached_draw_data['total_color']
+        else:
+            vg = obj.vertex_groups.active
+            vg_index = vg.index if vg else None
+            show_total_weight = getattr(context.window_manager, 'show_total_weight', False)
+            font_size = getattr(context.window_manager, 'weight_overlay_font_size', 14)
+            total_font_size = getattr(context.window_manager, 'weight_overlay_total_font_size', 12)
+            color = getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0))
+            total_color = getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0))
 
-        # Editモードとウェイトペイントモードで異なるアプローチ
+        # Get mesh data
         if obj.mode == 'EDIT':
-            # Editモードでは元のメッシュデータを直接使用
             mesh = obj.data
             matrix_world = obj.matrix_world
         else:
-            # ウェイトペイントモードでは評価されたメッシュを使用
-            depsgraph = context.evaluated_depsgraph_get()
-            eval_obj = obj.evaluated_get(depsgraph)
-            mesh = eval_obj.data
-            matrix_world = eval_obj.matrix_world
+            # For weight paint mode, we need depsgraph - only available with context
+            if _cached_draw_data is not None:
+                # Use base mesh data for cached drawing
+                mesh = obj.data
+                matrix_world = obj.matrix_world
+            else:
+                depsgraph = context.evaluated_depsgraph_get()
+                eval_obj = obj.evaluated_get(depsgraph)
+                mesh = eval_obj.data
+                matrix_world = eval_obj.matrix_world
 
-        region = context.region
-        rv3d = context.region_data
+        # Get region and viewport data - try from context or bpy.context
+        region = None
+        rv3d = None
+        try:
+            if _cached_draw_data is None and context:
+                region = context.region
+                rv3d = context.region_data
+            else:
+                # Try to get from bpy.context for drawing
+                ctx = bpy.context
+                region = getattr(ctx, 'region', None)
+                rv3d = getattr(ctx, 'region_data', None)
+        except (AttributeError, TypeError):
+            pass
+            
         if region is None or rv3d is None:
             return
 
-        # Re-check BLF availability (in case it became available after registration)
-        global BLF_AVAILABLE
+        # Check BLF availability
         if not BLF_AVAILABLE:
-            try:
-                import blf
-                BLF_AVAILABLE = True
-                print("Vertex Weight Viewer: BLF module became available during runtime")
-            except ImportError:
-                pass
-        
-        if not BLF_AVAILABLE:
-            # BLF module is not available, cannot draw text
             return
         
         font_id = 0
-        blf.size(font_id, context.window_manager.weight_overlay_font_size)
+        blf.size(font_id, font_size)
     except Exception as e:
         print(f"Vertex Weight Viewer: Error in draw_callback_px setup: {type(e).__name__}: {str(e)}")
         return
 
     try:
-        # 表示モードの設定
-        vg_index = vg.index if vg else None
-        
+        # Render vertex weights
         for v in mesh.vertices:
             try:
                 # アクティブな頂点グループのウェイト
@@ -325,8 +391,7 @@ def draw_callback_px(*args):
                 total_weight = sum(group.weight for group in v.groups)
                 
                 # 表示条件をチェック
-                show_total = context.window_manager.show_total_weight
-                if active_weight == 0.0 and (not show_total or total_weight == 0.0):
+                if active_weight == 0.0 and (not show_total_weight or total_weight == 0.0):
                     continue
 
                 co_world = matrix_world @ v.co
@@ -334,19 +399,17 @@ def draw_callback_px(*args):
                 if co_2d:
                     # Active Weightを大きく上に表示
                     if vg_index is not None and active_weight > 0.0:
-                        active_font_size = context.window_manager.weight_overlay_font_size
-                        blf.size(font_id, active_font_size)
-                        blf.color(font_id, *context.window_manager.weight_overlay_color)
+                        blf.size(font_id, font_size)
+                        blf.color(font_id, *color)
                         blf.position(font_id, co_2d.x, co_2d.y, 0)
                         blf.draw(font_id, f"{active_weight:.2f}")
                     
                     # Total Weightを小さく下に表示（Show Total Weightがオンの場合のみ）
-                    if context.window_manager.show_total_weight and total_weight > 0.0:
-                        total_font_size = context.window_manager.weight_overlay_total_font_size
+                    if show_total_weight and total_weight > 0.0:
                         blf.size(font_id, total_font_size)
-                        blf.color(font_id, *context.window_manager.weight_overlay_total_color)
+                        blf.color(font_id, *total_color)
                         # Active Weightが表示されている場合は、その下に表示
-                        y_offset = -active_font_size - 2 if (vg_index is not None and active_weight > 0.0) else 0
+                        y_offset = -font_size - 2 if (vg_index is not None and active_weight > 0.0) else 0
                         blf.position(font_id, co_2d.x, co_2d.y + y_offset, 0)
                         blf.draw(font_id, f"{total_weight:.2f}")
             except Exception as e:
@@ -471,6 +534,7 @@ def unregister_draw_handler():
 def update_show_weight_overlay(self, context):
     try:
         if context.window_manager.show_weight_overlay:
+            update_draw_data()  # Cache drawing data before enabling
             register_draw_handler()
         else:
             unregister_draw_handler()
@@ -490,10 +554,13 @@ def on_file_loaded(dummy):
 
 @bpy.app.handlers.persistent
 def on_scene_update(dummy):
-    """シーン更新時に確実にハンドラが登録されているかチェック"""
+    """シーン更新時に確実にハンドラが登録されているかチェックし、描画データを更新"""
     try:
         wm = bpy.context.window_manager
         if hasattr(wm, "show_weight_overlay") and wm.show_weight_overlay:
+            # Update cached drawing data for Blender 5.0+ compatibility
+            update_draw_data()
+            
             global _handle
             if _handle is None:
                 register_draw_handler()
