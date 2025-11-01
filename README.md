@@ -10,13 +10,15 @@ A Blender addon that displays vertex group weights as numerical overlays in weig
 ## Features / 機能
 
 ✨ **Dual Display System** - Shows active vertex group (large) + total weight (small) simultaneously  
-🎨 **Individual Customization** - Separate font sizes and colors for each display type  
+�️ **Flexible Display Control** - Toggle total weight display on/off as needed  
+�🎨 **Individual Customization** - Separate font sizes and colors for each display type  
 🔄 **Multi-Mode Support** - Works in both Weight Paint and Edit modes  
 ⚡ **Auto-Activation** - Automatically displays on Blender startup and file loads  
 🎯 **Smart Display** - Shows only non-zero values for clean visualization  
-🎛️ **Easy Controls** - Simple toggle and organized UI panel options
+📋 **Easy Controls** - Simple toggles and organized UI panel options
 
 **デュアル表示システム** - アクティブ頂点グループ（大）+ 合計ウェイト（小）を同時表示  
+**柔軟な表示制御** - 必要に応じて合計ウェイト表示をオン/オフ切り替え  
 **個別カスタマイズ** - それぞれの表示タイプで異なるフォントサイズと色を設定  
 **マルチモードサポート** - ウェイトペイントモードとEditモードの両方で動作  
 **自動アクティベーション** - Blender起動時とファイル読み込み時に自動表示  
@@ -40,8 +42,9 @@ A Blender addon that displays vertex group weights as numerical overlays in weig
 2. Enter Weight Paint or Edit mode / ウェイトペイントモードまたはEditモードに入る
 3. Open the sidebar (N key) and go to the "Item" tab to find the "Weight Viewer" panel / サイドバー（Nキー）を開いて「Item」タブの「Weight Viewer」パネルを探す
 4. Toggle "Show Overlay" to display vertex weights / 「Show Overlay」をオンにして頂点ウェイトを表示
-5. **Adjust font sizes**: Set "Active Vertex Group Size" (large, top) and "Total Weight Size" (small, bottom) / **フォントサイズ調整**: 「Active Vertex Group Size」（大、上）と「Total Weight Size」（小、下）を設定
-6. **Customize colors**: Set different colors for "Active Vertex Group Color" and "Total Weight Color" / **色のカスタマイズ**: 「Active Vertex Group Color」と「Total Weight Color」でそれぞれ異なる色を設定
+5. **Optional**: Toggle "Show Total Weight" to enable/disable total weight display / **オプション**: 「Show Total Weight」で合計ウェイト表示をオン/オフ切り替え
+6. **Adjust font sizes**: Set "Active Vertex Group Size" and optionally "Total Weight Size" / **フォントサイズ調整**: 「Active Vertex Group Size」と必要に応じて「Total Weight Size」を設定
+7. **Customize colors**: Set different colors for active group and total weight displays / **色のカスタマイズ**: アクティブグループと合計ウェイト表示それぞれに異なる色を設定
 
 ## Requirements / 動作環境
 
