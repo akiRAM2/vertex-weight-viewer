@@ -420,21 +420,6 @@ def draw_callback_px(*args):
         import traceback
         print(f"Stack trace: {traceback.format_exc()}")
 
-class VERTEX_WEIGHT_VIEWER_OT_diagnose(bpy.types.Operator):
-    """Run diagnostic check for Vertex Weight Viewer compatibility"""
-    bl_idname = "vertex_weight_viewer.diagnose"
-    bl_label = "Run Diagnostic"
-    bl_options = {'REGISTER'}
-    
-    def execute(self, context):
-        # Ensure modules are re-checked
-        ensure_required_modules()
-        # Run full diagnosis
-        diagnose_environment()
-        
-        self.report({'INFO'}, "Diagnostic complete. Check console for details.")
-        return {'FINISHED'}
-
 class VIEW3D_PT_weight_overlay(Panel):
     bl_label = "Weight Viewer"
     bl_space_type = 'VIEW_3D'
@@ -483,21 +468,6 @@ class VIEW3D_PT_weight_overlay(Panel):
             box.prop(wm, "weight_overlay_color", text="Active Vertex Group Color")
             if wm.show_total_weight:
                 box.prop(wm, "weight_overlay_total_color", text="Total Weight Color")
-        
-        # Diagnostic section
-        layout.separator()
-        box = layout.box()
-        box.label(text="Diagnostics:")
-        row = box.row()
-        row.operator("vertex_weight_viewer.diagnose", text="Run Diagnosis", icon='CONSOLE')
-        
-        # Show current status
-        status_box = box.box()
-        status_box.label(text=f"Blender: {'.'.join(map(str, get_blender_version()))}")
-        status_box.label(text=f"BLF: {'✓' if BLF_AVAILABLE else '✗'}")
-        status_box.label(text=f"GPU: {'✓' if GPU_AVAILABLE else '✗'}")
-        if check_lazy_weight_tool():
-            status_box.label(text="Lazy Weight Tool: ✓", icon='CHECKMARK')
 
 def register_draw_handler():
     global _handle
@@ -587,9 +557,8 @@ def register():
             print("Running environment diagnosis...")
             diagnose_environment()
         
-        bpy.utils.register_class(VERTEX_WEIGHT_VIEWER_OT_diagnose)
         bpy.utils.register_class(VIEW3D_PT_weight_overlay)
-        print("Vertex Weight Viewer: UI classes registered successfully")
+        print("Vertex Weight Viewer: UI panel registered successfully")
         
         bpy.types.WindowManager.show_weight_overlay = BoolProperty(
             name="Show Weight Overlay",
@@ -682,8 +651,7 @@ def unregister():
         # UIクラスを削除
         try:
             bpy.utils.unregister_class(VIEW3D_PT_weight_overlay)
-            bpy.utils.unregister_class(VERTEX_WEIGHT_VIEWER_OT_diagnose)
-            print("Vertex Weight Viewer: UI classes unregistered successfully")
+            print("Vertex Weight Viewer: UI panel unregistered successfully")
         except Exception as e:
             print(f"Vertex Weight Viewer: Error unregistering UI classes: {type(e).__name__}: {str(e)}")
         
