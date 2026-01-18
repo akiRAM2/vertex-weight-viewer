@@ -1,69 +1,121 @@
-# Vertex Weight Viewer / 頂点ウェイトビューワー
+# Vertex Weight Viewer for Blender
 
-<img width="795" height="534" alt="image" src="https://github.com/user-attachments/assets/444f6da4-e39b-4b65-bf08-f11a1e847073" />
-<img width="1481" height="993" alt="image" src="https://github.com/user-attachments/assets/4cc3563d-85de-45d6-9a4d-c4bbc552b0cd" />
+Advanced vertex weight overlay tool designed.
+Displays active vertex weights and total weight sums directly in the 3D viewport, with support for weight limit warnings.
 
-A Blender addon that displays vertex group weights as numerical overlays in weight paint and edit modes.
+![Vertex Weight Viewer Demo](https://github.com/akiRAM2/vertex-weight-viewer/assets/demo_image.png)
 
-ウェイトペイントモードとEditモード中に、頂点グループのウェイト値を数値オーバーレイとして表示するBlenderアドオンです。
+## ✨ Features
 
-## Features / 機能
+- **Real-time Overlay**: Displays vertex weights directly on the mesh in Edit Mode and Weight Paint Mode.
+- **Dual Display**:
+  - **Active Weight**: Shows the weight of the currently selected vertex group (Default: Yellow).
+  - **Total Weight**: Shows the normalized sum of all weights on the vertex (Default: Cyan). Essential for checking normalization (should be 1.0).
+- **Influence Limit Warning**:
+  - Highlights vertices that exceed a specified number of bone influences (e.g., > 4 bones).
+  - Critical for optimizing assets for game engines like Unity, Unreal Engine, or VRChat.
+  - Customizable threshold and warning color (Default: Red).
+- **Customization**:
+  - Adjust font sizes and colors for all elements.
+  - Toggle elements on/off individually.
+- **Blender Support**: Compatible with Blender 4.0+ and 5.0+.
 
-✨ **Dual Display System** - Shows active vertex group (large) + total weight (small) simultaneously  
-�️ **Flexible Display Control** - Toggle total weight display on/off as needed  
-�🎨 **Individual Customization** - Separate font sizes and colors for each display type  
-🔄 **Multi-Mode Support** - Works in both Weight Paint and Edit modes  
-⚡ **Auto-Activation** - Automatically displays on Blender startup and file loads  
-🎯 **Smart Display** - Shows only non-zero values for clean visualization  
-📋 **Easy Controls** - Simple toggles and organized UI panel options
+## 📦 Installation
 
-**デュアル表示システム** - アクティブ頂点グループ（大）+ 合計ウェイト（小）を同時表示  
-**柔軟な表示制御** - 必要に応じて合計ウェイト表示をオン/オフ切り替え  
-**個別カスタマイズ** - それぞれの表示タイプで異なるフォントサイズと色を設定  
-**マルチモードサポート** - ウェイトペイントモードとEditモードの両方で動作  
-**自動アクティベーション** - Blender起動時とファイル読み込み時に自動表示  
-**スマート表示** - 0より大きい値のみ表示してクリーンな視覚化を実現  
-**簡単操作** - シンプルな切り替えと整理されたUIパネルオプション
+1. Download the `vertex_weight_viewer.py` file.
+2. Open Blender.
+3. Go to `Edit > Preferences > Add-ons`.
+4. Click **Install...** and select the downloaded file.
+5. Enable the checkbox for **3D View: Vertex Weight Viewer**.
 
-## Installation / インストール
+## 🚀 Usage
 
-1. Download the `vertex_weight_viewer.py` file / `vertex_weight_viewer.py` ファイルをダウンロード
-2. Open Blender and go to Edit > Preferences > Add-ons / Blenderを開き、編集 > プリファレンス > アドオンへ移動
-3. Click "Install..." and select the downloaded file / 「インストール...」をクリックしてダウンロードしたファイルを選択
-4. Enable the addon by checking the checkbox next to "Vertex Weight Viewer" / 「Vertex Weight Viewer」の隣のチェックボックスをオンにしてアドオンを有効化
+1. Select a Mesh object.
+2. Enter **Weight Paint Mode** or **Edit Mode**.
+3. Open the **Sidebar (N-Panel)** in the 3D Viewport.
+4. Navigate to the **Item** tab.
+5. In the **Weight Viewer** panel:
+   - Check **Show Overlay** to enable the tool.
+   - Adjust **Active/Total Weight** visibility preferences.
+   - Enable **Influence Limit Warning** and set your **Max Bones** limit (e.g., 4) to detect overflow.
 
-**Note:** If the addon doesn't work after initial installation, try pressing N key to open the sidebar menu and click "Show Overlay" to toggle the display.
+## ⚙️ Configuration
 
-**注意:** 初回インストール時に動作しない場合は、Nキーのメニューから「Show Overlay」を押して切り替えてみてください。
+- **Show Overlay**: Main toggle for the addon.
+- **Show Total Weight**: Toggle display of the sum of weights.
+- **Display Settings**:
+  - **Active Weight**: Font size and color for the selected group's weight.
+  - **Total Weight**: Font size and color for the total weight sum.
+- **Influence Limit Warning**:
+  - **Max Bones**: Integer threshold. Vertices influenced by more bones than this number will be highlighted.
+  - Warning color applies to the text when the limit is exceeded.
 
-## Usage / 使用方法
+## 📝 Requirements
 
-1. Select a mesh object with vertex groups / 頂点グループを持つメッシュオブジェクトを選択
-2. Enter Weight Paint or Edit mode / ウェイトペイントモードまたはEditモードに入る
-3. Open the sidebar (N key) and go to the "Item" tab to find the "Weight Viewer" panel / サイドバー（Nキー）を開いて「Item」タブの「Weight Viewer」パネルを探す
-4. Toggle "Show Overlay" to display vertex weights / 「Show Overlay」をオンにして頂点ウェイトを表示
-5. **Optional**: Toggle "Show Total Weight" to enable/disable total weight display / **オプション**: 「Show Total Weight」で合計ウェイト表示をオン/オフ切り替え
-6. **Adjust font sizes**: Set "Active Vertex Group Size" and optionally "Total Weight Size" / **フォントサイズ調整**: 「Active Vertex Group Size」と必要に応じて「Total Weight Size」を設定
-7. **Customize colors**: Set different colors for active group and total weight displays / **色のカスタマイズ**: アクティブグループと合計ウェイト表示それぞれに異なる色を設定
+- Blender 5.0+ (Tested on 5.0.1).
 
-## Requirements / 動作環境
+## 📄 License
 
-- Blender 4.0 or later (including 5.0+) / Blender 4.0以降（5.0+を含む）
+This project is licensed under the GPL-3.0 License - see the LICENSE file for details.
 
-## License / ライセンス
+---
 
-This project is licensed under the GNU General Public License v3.0 or later - see the [LICENSE](LICENSE) file for details.
+# Vertex Weight Viewer for Blender (日本語)
 
-このプロジェクトはGNU General Public License v3.0以降の下でライセンスされています - 詳細は [LICENSE](LICENSE) ファイルをご覧ください。
+高機能ウェイトオーバーレイツールです。
+アクティブな頂点ウェイトと、ウェイトの合計値を3Dビューポート上に直接表示します。ウェイト数制限の警告機能も搭載しています。
 
-## Contributing / コントリビューション
+![Vertex Weight Viewer Demo](https://github.com/akiRAM2/vertex-weight-viewer/assets/demo_image.png)
 
-Feel free to fork this repository and make your own improvements!
+## ✨ 機能
 
-フォークはご自由にどうぞ！
+- **リアルタイムオーバーレイ**: 編集モードおよびウェイトペイントモードで、メッシュ上に直接ウェイト値を表示します。
+- **デュアル表示**:
+  - **Active Weight (アクティブウェイト)**: 現在選択している頂点グループのウェイトを表示します（デフォルト：黄色）。
+  - **Total Weight (合計ウェイト)**: 頂点に割り当てられた全ウェイトの合計を表示します（デフォルト：シアン）。正規化（合計1.0）の確認に必須です。
+- **影響数制限の警告 (Influence Limit Warning)**:
+  - 指定したボーン数（例：4本）を超えて影響を受けている頂点をハイライト表示します。
+  - Unity、Unreal Engine、VRChatなどのゲームエンジン向けアセットの最適化に重要です。
+  - 閾値と警告色はカスタマイズ可能です（デフォルト：赤）。
+- **カスタマイズ**:
+  - 全要素のフォントサイズと色を調整可能。
+  - 各要素の表示/非表示を個別に切り替え可能。
+- **Blenderサポート**: Blender 4.0以降および5.0以降に対応。
 
-## Credits / クレジット
+## 📦 インストール方法
 
-This addon was written entirely by GitHub Copilot.
+1. `vertex_weight_viewer.py` ファイルをダウンロードします。
+2. Blenderを開きます。
+3. `編集 (Edit) > プリファレンス (Preferences) > アドオン (Add-ons)` に移動します。
+4. **インストール... (Install...)** をクリックし、ダウンロードしたファイルを選択します。
+5. **3D View: Vertex Weight Viewer** のチェックボックスを有効にします。
 
-このアドオンはGitHub Copilotによって全て書かれました。
+## 🚀 使い方
+
+1. メッシュオブジェクトを選択します。
+2. **ウェイトペイントモード** または **編集モード** に入ります。
+3. 3Dビューポートで **サイドバー (N-Panel)** を開きます（ショートカット：`N`）。
+4. **Item** タブに移動します。
+5. **Weight Viewer** パネルで以下を操作します：
+   - **Show Overlay** をチェックしてツールを有効にします。
+   - **Active/Total Weight** の表示設定を調整します。
+   - **Influence Limit Warning** を有効にし、**Max Bones**（制限数）を設定して、オーバーフローしている頂点を検出します。
+
+## ⚙️ 設定項目
+
+- **Show Overlay**: アドオンのメインスイッチ。
+- **Show Total Weight**: ウェイト合計値の表示切り替え。
+- **Display Settings**:
+  - **Active Weight**: 選択中のグループウェイトのフォントサイズと色。
+  - **Total Weight**: 合計ウェイトのフォントサイズと色。
+- **Influence Limit Warning**:
+  - **Max Bones**: 整数の閾値。この数より多くのボーンから影響を受けている頂点がハイライトされます。
+  - 警告色は、制限を超えた数値のテキストに適用されます。
+
+## 📝 必要要件
+
+- Blender 5.0以降 (5.0.1で動作確認済み)
+
+## 📄 ライセンス
+
+このプロジェクトは GPL-3.0 ライセンスの下で公開されています。詳細は LICENSE ファイルをご確認ください。

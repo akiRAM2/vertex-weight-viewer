@@ -1,470 +1,181 @@
 bl_info = {
     "name": "Vertex Weight Viewer",
-    "author": "copilot, akiRAM2",
-    "version": (1, 6, 0),
+    "author": "akiRAM2",
+    "version": (1, 7, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Item > Weight Viewer",
-    "description": "Advanced vertex weight overlay with dual display, individual customization, and auto-activation for Weight Paint and Edit modes. Compatible with Blender 4.0+ and 5.0+.",
+    "description": "Advanced vertex weight overlay with dual display and limit warnings.",
     "warning": "",
-    "doc_url": "",
     "category": "3D View",
     "support": "COMMUNITY",
     "license": "GPL-3.0-or-later",
 }
 
 import bpy
-from bpy.types import Panel
-from bpy.props import BoolProperty, IntProperty, FloatVectorProperty
 import bpy_extras
-import bpy_extras.view3d_utils
-from mathutils import Vector
-import traceback
-import sys
+from bpy.types import Panel, Operator
+from bpy.props import BoolProperty, IntProperty, FloatVectorProperty
+from bpy.app.handlers import persistent
 
-# Safe imports for version compatibility
-try:
-    import gpu
-    GPU_AVAILABLE = True
-except ImportError:
-    GPU_AVAILABLE = False
-    print("Vertex Weight Viewer: GPU module not available")
-
+# --- Module Checks ---
 try:
     import blf
-    BLF_AVAILABLE = True
+    MODULES_AVAILABLE = True
 except ImportError:
-    BLF_AVAILABLE = False
-    print("Vertex Weight Viewer: BLF module not available")
+    MODULES_AVAILABLE = False
 
-_handle = None
-_cached_draw_data = None
+# --- Core Logic ---
+class VertexWeightViewerCore:
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
-def update_draw_data():
-    """Update cached drawing data from current context (call this outside draw phase)."""
-    global _cached_draw_data
-    try:
-        context = bpy.context
-        obj = context.active_object
-        
-        if not obj or obj.mode not in ['WEIGHT_PAINT', 'EDIT'] or obj.type != 'MESH':
-            _cached_draw_data = None
+    def __init__(self):
+        self.draw_handle = None
+        self.font_id = 0
+
+    def start_session(self, context):
+        if self.draw_handle is None:
+            try:
+                args = (None, bpy.context) if bpy.app.version < (5, 0, 0) else ()
+                self.draw_handle = bpy.types.SpaceView3D.draw_handler_add(
+                    draw_callback_wrapper, args, 'WINDOW', 'POST_PIXEL'
+                )
+                # Force redraw
+                for area in context.screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+            except Exception as e:
+                print(f"WeightViewer Error: {e}")
+
+    def stop_session(self):
+        if self.draw_handle is not None:
+            bpy.types.SpaceView3D.draw_handler_remove(self.draw_handle, 'WINDOW')
+            self.draw_handle = None
+
+    def draw(self, context=None):
+        if not MODULES_AVAILABLE: 
             return
-        
-        # Cache necessary data for drawing
-        _cached_draw_data = {
-            'obj': obj,
-            'mode': obj.mode,
-            'vg_index': obj.vertex_groups.active.index if obj.vertex_groups.active else None,
-            'show_overlay': context.window_manager.show_weight_overlay if hasattr(context.window_manager, 'show_weight_overlay') else False,
-            'show_total_weight': context.window_manager.show_total_weight if hasattr(context.window_manager, 'show_total_weight') else False,
-            'font_size': getattr(context.window_manager, 'weight_overlay_font_size', 14),
-            'total_font_size': getattr(context.window_manager, 'weight_overlay_total_font_size', 12),
-            'color': getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0)),
-            'total_color': getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0)),
-            'show_warning': getattr(context.window_manager, 'show_weight_limit_warning', False),
-            'warning_threshold': getattr(context.window_manager, 'weight_limit_threshold', 5),
-            'warning_color': getattr(context.window_manager, 'weight_warning_color', (1.0, 0.0, 0.0, 1.0)),
-        }
-        
-    except (AttributeError, TypeError):
-        _cached_draw_data = None
-
-def check_lazy_weight_tool():
-    """Check if Lazy Weight Tool is installed and active."""
-    try:
-        addon_modules = bpy.context.preferences.addons
-        for addon in addon_modules:
-            if "lazy" in addon.module.lower() and "weight" in addon.module.lower():
-                return True
-        return False
-    except:
-        return False
-
-def ensure_required_modules():
-    """Ensure all required modules are available, attempting to resolve missing dependencies."""
-    global GPU_AVAILABLE, BLF_AVAILABLE
-    
-    # Try to import again in case other addons have made modules available
-    if not GPU_AVAILABLE:
-        try:
-            import gpu
-            GPU_AVAILABLE = True
-            print("Vertex Weight Viewer: GPU module now available")
-        except ImportError:
-            pass
-    
-    if not BLF_AVAILABLE:
-        try:
-            import blf
-            BLF_AVAILABLE = True
-            print("Vertex Weight Viewer: BLF module now available")
-        except ImportError:
-            pass
-    
-    # Check if we have Lazy Weight Tool which might provide missing modules
-    has_lazy_weight = check_lazy_weight_tool()
-    if has_lazy_weight:
-        print("Vertex Weight Viewer: Lazy Weight Tool detected, attempting module resolution...")
-    
-    return BLF_AVAILABLE  # BLF is critical for text rendering
-
-_handle = None
-
-# Blender version compatibility utilities
-def get_blender_version():
-    """Get the current Blender version as a tuple."""
-    return bpy.app.version
-
-def is_blender_5_or_later():
-    """Check if running on Blender 5.0 or later."""
-    return get_blender_version() >= (5, 0, 0)
-
-def diagnose_environment():
-    """Diagnose the current Blender environment for compatibility issues."""
-    print("=== Vertex Weight Viewer: Environment Diagnosis ===")
-    print(f"Blender Version: {get_blender_version()}")
-    print(f"Python Version: {sys.version}")
-    print(f"Platform: {sys.platform}")
-    
-    # Check for installed addons (especially Lazy Weight Tool)
-    print("--- Installed Addons ---")
-    addon_modules = bpy.context.preferences.addons
-    for addon in addon_modules:
-        if "weight" in addon.module.lower() or "lazy" in addon.module.lower():
-            print(f"✓ Weight-related addon found: {addon.module}")
-    
-    # Check Python modules
-    modules_to_check = [
-        'bpy', 'bpy.types', 'bpy.props', 'bpy_extras', 'bpy_extras.view3d_utils',
-        'mathutils', 'gpu', 'blf', 'traceback'
-    ]
-    
-    print("--- Core Blender Modules ---")
-    for module_name in modules_to_check:
-        try:
-            module = __import__(module_name)
-            module_path = getattr(module, '__file__', 'Built-in')
-            print(f"✓ {module_name}: Available ({module_path})")
-        except ImportError as e:
-            print(f"✗ {module_name}: Missing ({str(e)})")
-        except Exception as e:
-            print(f"⚠ {module_name}: Error ({type(e).__name__}: {str(e)})")
-    
-    # Check GPU and BLF specific availability
-    print("--- Graphics Modules ---")
-    print(f"GPU Module Available: {GPU_AVAILABLE}")
-    print(f"BLF Module Available: {BLF_AVAILABLE}")
-    
-    # Check sys.path for additional module paths
-    print("--- Python Module Paths ---")
-    for i, path in enumerate(sys.path[:5]):  # Show first 5 paths
-        print(f"  {i}: {path}")
-    if len(sys.path) > 5:
-        print(f"  ... and {len(sys.path) - 5} more paths")
-    
-    # Check specific Blender 5.0 compatibility issues
-    if is_blender_5_or_later():
-        print("--- Blender 5.0+ Specific Checks ---")
-        
-        # Check for deprecated API usage
-        try:
-            # Test if draw handler signature has changed
-            def test_draw():
-                pass
             
-            handle = bpy.types.SpaceView3D.draw_handler_add(test_draw, (), 'WINDOW', 'POST_PIXEL')
-            bpy.types.SpaceView3D.draw_handler_remove(handle, 'WINDOW')
-            print("✓ Draw handler: Compatible with Blender 5.0+ signature")
-        except Exception as e:
-            print(f"✗ Draw handler: Incompatible ({type(e).__name__}: {str(e)})")
-    
-    # Test GPU and BLF functionality if available
-    print("--- Functionality Tests ---")
-    if BLF_AVAILABLE:
-        try:
-            import blf
-            blf.size(0, 12)
-            print("✓ BLF: Basic text rendering functions available")
-        except Exception as e:
-            print(f"✗ BLF: Function test failed ({type(e).__name__}: {str(e)})")
-    
-    if GPU_AVAILABLE:
-        try:
-            import gpu
-            print("✓ GPU: Module imported successfully")
-        except Exception as e:
-            print(f"✗ GPU: Import test failed ({type(e).__name__}: {str(e)})")
-    
-    print("=== End Diagnosis ===")
+        ctx = context if context else bpy.context
+        wm = ctx.window_manager
+        
+        if not getattr(wm, "show_weight_overlay", False):
+            return
 
-def check_import_compatibility():
-    """Check if all required modules can be imported."""
-    missing_modules = []
-    
-    # Check critical Blender modules
-    if not BLF_AVAILABLE:
-        missing_modules.append("blf")
-    
-    if not GPU_AVAILABLE:
-        missing_modules.append("gpu")
-    
-    try:
-        import bpy_extras.view3d_utils
-    except ImportError:
-        missing_modules.append("bpy_extras.view3d_utils")
-    
-    try:
-        from mathutils import Vector
-    except ImportError:
-        missing_modules.append("mathutils")
-    
-    try:
-        from bpy.types import Panel
-    except ImportError:
-        missing_modules.append("bpy.types")
-    
-    try:
-        from bpy.props import BoolProperty
-    except ImportError:
-        missing_modules.append("bpy.props")
-    
-    if missing_modules:
-        print(f"Vertex Weight Viewer: Missing required modules: {', '.join(missing_modules)}")
-        print("This may indicate an incomplete Blender installation or a non-standard environment.")
-        # Return False only if truly critical modules are missing
-        critical_modules = ['bpy.types', 'bpy.props', 'mathutils', 'bpy_extras.view3d_utils']
-        critical_missing = [m for m in missing_modules if m in critical_modules]
-        return len(critical_missing) == 0
-    
-    return True
+        # --- Settings ---
+        show_total = getattr(wm, "show_total_weight", True)
+        
+        font_size_active = getattr(wm, "weight_overlay_font_size", 14)
+        font_size_total = getattr(wm, "weight_overlay_total_font_size", 12)
+        color_active = getattr(wm, "weight_overlay_color", (1, 1, 0, 1))
+        color_total = getattr(wm, "weight_overlay_total_color", (0, 1, 1, 1))
+        
+        show_warning = getattr(wm, "show_weight_limit_warning", False)
+        warning_thresh = getattr(wm, "weight_limit_threshold", 4)
+        warning_color = getattr(wm, "weight_warning_color", (1, 0, 0, 1))
 
-def check_api_compatibility():
-    """Check if all required APIs are available for this Blender version."""
-    try:
-        # First check if modules can be imported
-        if not check_import_compatibility():
-            return False
-        
-        # Test critical imports and API calls only if modules are available
-        if BLF_AVAILABLE and GPU_AVAILABLE:
-            import bpy_extras.view3d_utils
-        
-        # Test draw handler registration with safe method for all versions
-        # Use a simple test callback
-        def test_callback():
-            pass
-        
-        # Try different draw handler argument formats for version compatibility
-        temp_handle = None
-        try:
-            if is_blender_5_or_later():
-                # Blender 5.0+ may have stricter argument requirements
-                temp_handle = bpy.types.SpaceView3D.draw_handler_add(
-                    test_callback, (), 'WINDOW', 'POST_PIXEL'
-                )
-            else:
-                # Blender 4.x format
-                temp_handle = bpy.types.SpaceView3D.draw_handler_add(
-                    test_callback, (None, bpy.context), 'WINDOW', 'POST_PIXEL'
-                )
+        # --- Object & Mesh ---
+        obj = ctx.active_object
+        if not obj or obj.type != 'MESH' or obj.mode not in {'EDIT', 'WEIGHT_PAINT'}:
+            return
             
-            if temp_handle is not None:
-                bpy.types.SpaceView3D.draw_handler_remove(temp_handle, 'WINDOW')
-        except Exception as draw_error:
-            print(f"Vertex Weight Viewer: Draw handler test failed: {type(draw_error).__name__}: {str(draw_error)}")
-            # Return True even if draw handler test fails, as the addon can still function partially
-        
-        print(f"Vertex Weight Viewer: API compatibility check completed for Blender {get_blender_version()}")
-        return True
-    except Exception as e:
-        print(f"Vertex Weight Viewer: API compatibility check failed for Blender {get_blender_version()}")
-        print(f"Error details: {type(e).__name__}: {str(e)}")
-        print(f"Stack trace: {traceback.format_exc()}")
-        return False
-
-def draw_callback_px(*args):
-    """
-    Draw callback function compatible with both Blender 4.x and 5.0+.
-    Uses cached data to avoid context access issues in Blender 5.0+.
-    """
-    try:
-        global _cached_draw_data
-        
-        # Use cached data if available (for Blender 5.0+ compatibility)
-        if _cached_draw_data is None:
-            # Try to get context for Blender 4.x
-            context = None
-            if len(args) >= 2:
-                context = args[1]
-            elif hasattr(bpy, 'context'):
-                try:
-                    context = bpy.context
-                    # Test if context is accessible
-                    _ = context.active_object
-                except (AttributeError, TypeError):
-                    # Context is restricted, skip drawing
-                    return
+        try:
+            # Determining the mesh to iterate
+            depsgraph = ctx.evaluated_depsgraph_get()
+            eval_obj = obj.evaluated_get(depsgraph)
             
-            if context is None:
-                return
+            use_eval = len(eval_obj.data.vertices) == len(obj.data.vertices)
             
-            obj = context.active_object
-            if not obj or obj.mode not in ['WEIGHT_PAINT', 'EDIT'] or obj.type != 'MESH':
-                return
-        else:
-            # Use cached data
-            obj = _cached_draw_data['obj']
-            if not _cached_draw_data['show_overlay']:
-                return
-        
-        # Get drawing parameters from cached data or context
-        if _cached_draw_data is not None:
-            vg_index = _cached_draw_data['vg_index']
-            show_total_weight = _cached_draw_data['show_total_weight']
-            font_size = _cached_draw_data['font_size']
-            total_font_size = _cached_draw_data['total_font_size']
-            color = _cached_draw_data['color']
-            total_color = _cached_draw_data['total_color']
-        else:
-            vg = obj.vertex_groups.active
-            vg_index = vg.index if vg else None
-            show_total_weight = getattr(context.window_manager, 'show_total_weight', False)
-            font_size = getattr(context.window_manager, 'weight_overlay_font_size', 14)
-            total_font_size = getattr(context.window_manager, 'weight_overlay_total_font_size', 12)
-            color = getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0))
-            total_color = getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0))
-            show_warning = getattr(context.window_manager, 'show_weight_limit_warning', False)
-            warning_threshold = getattr(context.window_manager, 'weight_limit_threshold', 5)
-            warning_color = getattr(context.window_manager, 'weight_warning_color', (1.0, 0.0, 0.0, 1.0))
-
-        if _cached_draw_data is not None:
-             show_warning = _cached_draw_data.get('show_warning', False)
-             warning_threshold = _cached_draw_data.get('warning_threshold', 5)
-             warning_color = _cached_draw_data.get('warning_color', (1.0, 0.0, 0.0, 1.0))
-
-        # Get mesh data
-        if obj.mode == 'EDIT':
-            mesh = obj.data
-            matrix_world = obj.matrix_world
-        else:
-            # For weight paint mode, we need depsgraph - only available with context
-            if _cached_draw_data is not None:
-                # Use base mesh data for cached drawing
-                mesh = obj.data
-                matrix_world = obj.matrix_world
-            else:
-                depsgraph = context.evaluated_depsgraph_get()
-                eval_obj = obj.evaluated_get(depsgraph)
+            if use_eval:
                 mesh = eval_obj.data
                 matrix_world = eval_obj.matrix_world
-
-        # Get region and viewport data - try from context or bpy.context
-        region = None
-        rv3d = None
-        try:
-            if _cached_draw_data is None and context:
-                region = context.region
-                rv3d = context.region_data
             else:
-                # Try to get from bpy.context for drawing
-                ctx = bpy.context
-                region = getattr(ctx, 'region', None)
-                rv3d = getattr(ctx, 'region_data', None)
-        except (AttributeError, TypeError):
-            pass
+                mesh = obj.data
+                matrix_world = obj.matrix_world
+
+            if obj.mode == 'EDIT':
+                mesh = obj.data
+                matrix_world = obj.matrix_world
+
+            vg_active = obj.vertex_groups.active
+            vg_index = vg_active.index if vg_active else None
             
-        if region is None or rv3d is None:
+            region = ctx.region
+            rv3d = ctx.region_data
+        except:
             return
 
-        # Check BLF availability
-        if not BLF_AVAILABLE:
-            return
+        # --- Iteration ---
+        blf.size(self.font_id, font_size_active)
         
-        font_id = 0
-        blf.size(font_id, font_size)
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Error in draw_callback_px setup: {type(e).__name__}: {str(e)}")
-        return
-
-    try:
-        # Render vertex weights
         for v in mesh.vertices:
-            try:
-                # アクティブな頂点グループのウェイト
-                active_weight = 0.0
-                if vg_index is not None:
-                    for group in v.groups:
-                        if group.group == vg_index:
-                            active_weight = group.weight
-                            break
-                
-                # 全ての頂点グループのウェイト合計
-                total_weight = sum(group.weight for group in v.groups)
-                
-                # 表示条件をチェック
-                if active_weight == 0.0 and (not show_total_weight or total_weight == 0.0):
-                    continue
-
-                # インフルエンス数（有効なウェイト数）をカウント
-                influence_count = 0
-                if show_warning:
-                    # ゼロより大きいウェイトを持つグループをカウント
-                    influence_count = sum(1 for group in v.groups if group.weight > 0.001)
-
-                co_world = matrix_world @ v.co
-                co_2d = bpy_extras.view3d_utils.location_3d_to_region_2d(region, rv3d, co_world)
-                if co_2d:
-                    # Active Weight表示
-                    if vg_index is not None and active_weight > 0.0:
-                        blf.size(font_id, font_size)
-                        
-                        # 警告判定: インフルエンス数が閾値以上なら赤字＆太字
-                        is_warning = show_warning and influence_count >= warning_threshold
-                        draw_color = warning_color if is_warning else color
-                        
-                        blf.color(font_id, *draw_color)
-                        
-                        if is_warning:
-                            # フェイクボールド（重ね書き）で太字表現
-                            offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-                            for ox, oy in offsets:
-                                blf.position(font_id, co_2d.x + ox, co_2d.y + oy, 0)
-                                blf.draw(font_id, f"{active_weight:.2f}")
-                        
-                        # メイン描画
-                        blf.position(font_id, co_2d.x, co_2d.y, 0)
-                        blf.draw(font_id, f"{active_weight:.2f}")
-                    
-                    # Total Weightを小さく下に表示（Show Total Weightがオンの場合のみ）
-                    if show_total_weight and total_weight > 0.0:
-                        blf.size(font_id, total_font_size)
-                        
-                        # Total Weightも警告対象とするか？ -> 現在はActive Weight同様に色を変える
-                        is_warning = show_warning and influence_count >= warning_threshold
-                        draw_color = warning_color if is_warning else total_color
-                        
-                        blf.color(font_id, *draw_color)
-                        
-                        # Active Weightが表示されている場合は、その下に表示
-                        y_offset = -font_size - 2 if (vg_index is not None and active_weight > 0.0) else 0
-                        
-                        if is_warning:
-                            # フェイクボールド
-                            offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-                            for ox, oy in offsets:
-                                blf.position(font_id, co_2d.x + ox, co_2d.y + y_offset + oy, 0)
-                                blf.draw(font_id, f"{total_weight:.2f}")
-
-                        blf.position(font_id, co_2d.x, co_2d.y + y_offset, 0)
-                        blf.draw(font_id, f"{total_weight:.2f}")
-            except Exception as e:
-                print(f"Vertex Weight Viewer: Error processing vertex {v.index}: {type(e).__name__}: {str(e)}")
+            # 1. Project 3D -> 2D
+            co_world = matrix_world @ v.co
+            co_2d = bpy_extras.view3d_utils.location_3d_to_region_2d(region, rv3d, co_world)
+            if not co_2d:
                 continue
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Error in draw_callback_px rendering loop: {type(e).__name__}: {str(e)}")
-        import traceback
-        print(f"Stack trace: {traceback.format_exc()}")
 
+            # 2. Weights
+            active_w = 0.0
+            total_w = 0.0
+            influence_count = 0
+            
+            # Use original loop for groups as no simple way to map eval groups back without index matching
+            for g in v.groups:
+                w = g.weight
+                total_w += w
+                if vg_index is not None and g.group == vg_index:
+                    active_w = w
+                
+                if w > 0.001:
+                    influence_count += 1
+            
+            # --- Draw Overlay Numbers on Mesh ---
+            has_active = (vg_index is not None and active_w > 0.0)
+            has_total = (show_total and total_w > 0.0)
+            
+            if has_active or has_total:
+                is_warn = show_warning and (influence_count >= warning_thresh)
+                
+                if has_active:
+                    col = warning_color if is_warn else color_active
+                    self.draw_text(co_2d.x, co_2d.y, f"{active_w:.2f}", font_size_active, col, is_warn)
+
+                if has_total:
+                    col = warning_color if is_warn else color_total
+                    off_y = (-font_size_active - 2) if has_active else 0
+                    self.draw_text(co_2d.x, co_2d.y + off_y, f"{total_w:.2f}", font_size_total, col, is_warn)
+
+    def draw_text(self, x, y, text, size, color, bold=False):
+        blf.size(self.font_id, size)
+        blf.color(self.font_id, *color)
+        if bold:
+            # Multipass for thickness
+            for ox, oy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                blf.position(self.font_id, x+ox, y+oy, 0)
+                blf.draw(self.font_id, text)
+        blf.position(self.font_id, x, y, 0)
+        blf.draw(self.font_id, text)
+
+core = VertexWeightViewerCore.get_instance()
+
+# --- Callbacks ---
+def draw_callback_wrapper(*args):
+    context = args[1] if len(args) > 1 else bpy.context
+    core.draw(context)
+
+@persistent
+def on_load(dummy):
+    wm = bpy.context.window_manager
+    if hasattr(wm, "show_weight_overlay") and wm.show_weight_overlay:
+        core.start_session(bpy.context)
+
+# --- UI ---
 class VIEW3D_PT_weight_overlay(Panel):
     bl_label = "Weight Viewer"
     bl_space_type = 'VIEW_3D'
@@ -472,283 +183,72 @@ class VIEW3D_PT_weight_overlay(Panel):
     bl_category = "Item"
 
     @classmethod
-    def poll(cls, context):
-        return (context.active_object and 
-                context.active_object.type == 'MESH' and
-                context.active_object.vertex_groups)
+    def poll(cls, c): 
+        return c.active_object and c.active_object.type=='MESH'
 
     def draw(self, context):
         layout = self.layout
         wm = context.window_manager
+        
         layout.prop(wm, "show_weight_overlay", text="Show Overlay")
+        if not wm.show_weight_overlay: return
         
-        # Display module availability status
-        if not BLF_AVAILABLE:
-            box = layout.box()
-            box.alert = True
-            box.label(text="⚠ Text rendering unavailable", icon='ERROR')
-            box.label(text="BLF module missing")
-            if check_lazy_weight_tool():
-                box.label(text="Try restarting Blender")
-            else:
-                box.operator("wm.console_toggle", text="Run Diagnosis", icon='CONSOLE')
+        layout.separator()
+        layout.prop(wm, "show_total_weight", text="Show Total Weight")
         
-        if wm.show_weight_overlay:
-            layout.separator()
-            
-            # Total Weight表示切り替え
-            layout.prop(wm, "show_total_weight", text="Show Total Weight")
-            layout.separator()
-            
-            # フォントサイズ設定セクション
-            box = layout.box()
-            box.label(text="Font Sizes:")
-            box.prop(wm, "weight_overlay_font_size", text="Active Vertex Group Size")
-            if wm.show_total_weight:
-                box.prop(wm, "weight_overlay_total_font_size", text="Total Weight Size")
-            
-            # カラー設定セクション
-            box = layout.box()
-            box.label(text="Colors:")
-            box.prop(wm, "weight_overlay_color", text="Active Vertex Group Color")
-            if wm.show_total_weight:
-            layout.prop(wm, "weight_overlay_total_color", text="Total Weight Color")
-            
-            layout.separator()
-            
-            # インフルエンス数警告設定
-            box = layout.box()
-            box.prop(wm, "show_weight_limit_warning", text="Show Weight Limit Warning")
-            if wm.show_weight_limit_warning:
-                # 閾値設定 (Unity標準は4なので、5以上で警告する設定が一般的)
-                box.prop(wm, "weight_limit_threshold", text="Warning Threshold")
-                box.prop(wm, "weight_warning_color", text="Warning Color")
-                
-                # ヘルプテキスト的なものを表示
-                row = box.row()
-                row.label(text=f"Warning when Influences >= {wm.weight_limit_threshold}", icon='INFO')
+        layout.separator()
+        
+        col = layout.column(align=True)
+        col.label(text="Display Settings")
+        col.prop(wm, "weight_overlay_font_size", text="Active Weight")
+        col.prop(wm, "weight_overlay_color", text="Active Color")
+        if wm.show_total_weight:
+            col.prop(wm, "weight_overlay_total_font_size", text="Total Weight")
+            col.prop(wm, "weight_overlay_total_color", text="Total Color")
+        
+        layout.separator()
+        layout.prop(wm, "show_weight_limit_warning", text="Influence Limit Warning")
+        if wm.show_weight_limit_warning:
+            col = layout.column(align=True)
+            col.prop(wm, "weight_limit_threshold", text="Max Bones")
+            col.prop(wm, "weight_warning_color", text="")
 
-def register_draw_handler():
-    global _handle
-    try:
-        if _handle is None:
-            # Blender 5.0+ compatible draw handler registration
-            if is_blender_5_or_later():
-                # Use the new format for Blender 5.0+
-                _handle = bpy.types.SpaceView3D.draw_handler_add(
-                    draw_callback_px, (), 'WINDOW', 'POST_PIXEL'
-                )
-            else:
-                # Use the legacy format for Blender 4.x
-                _handle = bpy.types.SpaceView3D.draw_handler_add(
-                    draw_callback_px, (None, bpy.context), 'WINDOW', 'POST_PIXEL'
-                )
-            print(f"Vertex Weight Viewer: Draw handler registered successfully for Blender {get_blender_version()}")
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Failed to register draw handler: {type(e).__name__}: {str(e)}")
-        import traceback
-        print(f"Stack trace: {traceback.format_exc()}")
-
-def unregister_draw_handler():
-    global _handle
-    try:
-        if _handle is not None:
-            bpy.types.SpaceView3D.draw_handler_remove(_handle, 'WINDOW')
-            _handle = None
-            print(f"Vertex Weight Viewer: Draw handler unregistered successfully")
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Failed to unregister draw handler: {type(e).__name__}: {str(e)}")
-        _handle = None  # Reset handle even if unregistration failed
-
-def update_show_weight_overlay(self, context):
-    try:
-        if context.window_manager.show_weight_overlay:
-            update_draw_data()  # Cache drawing data before enabling
-            register_draw_handler()
-        else:
-            unregister_draw_handler()
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Error in update_show_weight_overlay: {type(e).__name__}: {str(e)}")
-        import traceback
-        print(f"Stack trace: {traceback.format_exc()}")
-
-def on_file_loaded(dummy):
-    """ファイル読み込み時に呼び出される関数"""
-    try:
-        wm = bpy.context.window_manager
-        if hasattr(wm, "show_weight_overlay") and wm.show_weight_overlay:
-            register_draw_handler()
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Error in on_file_loaded: {type(e).__name__}: {str(e)}")
-
-@bpy.app.handlers.persistent
-def on_scene_update(dummy):
-    """シーン更新時に確実にハンドラが登録されているかチェックし、描画データを更新"""
-    try:
-        wm = bpy.context.window_manager
-        if hasattr(wm, "show_weight_overlay") and wm.show_weight_overlay:
-            # Update cached drawing data for Blender 5.0+ compatibility
-            update_draw_data()
-            
-            global _handle
-            if _handle is None:
-                register_draw_handler()
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Error in on_scene_update: {type(e).__name__}: {str(e)}")
+# --- Reg ---
+def update_toggle(self, context):
+    if self.show_weight_overlay: core.start_session(context)
+    else: core.stop_session()
 
 def register():
-    try:
-        print(f"Vertex Weight Viewer: Starting registration for Blender {get_blender_version()}")
-        
-        # Ensure required modules are available
-        modules_available = ensure_required_modules()
-        if not modules_available:
-            print("Vertex Weight Viewer: Critical modules missing!")
-            print("If you have Lazy Weight Tool installed, try restarting Blender.")
-            diagnose_environment()
-            
-            # Still register the addon but warn about limited functionality
-            print("Vertex Weight Viewer: Continuing with limited functionality...")
-        
-        # Check API compatibility
-        if not check_api_compatibility():
-            print(f"Vertex Weight Viewer: Warning - Running on Blender {get_blender_version()}, some features may not work correctly.")
-            print("Running environment diagnosis...")
-            diagnose_environment()
-        
-        bpy.utils.register_class(VIEW3D_PT_weight_overlay)
-        print("Vertex Weight Viewer: UI panel registered successfully")
-        
-        bpy.types.WindowManager.show_weight_overlay = BoolProperty(
-            name="Show Weight Overlay",
-            default=True,
-            update=update_show_weight_overlay
-        )
-        bpy.types.WindowManager.weight_overlay_font_size = IntProperty(
-            name="Active Vertex Group Font Size", 
-            description="Font size for active vertex group weight display",
-            default=14, min=8, max=64
-        )
-        bpy.types.WindowManager.weight_overlay_total_font_size = IntProperty(
-            name="Total Weight Font Size",
-            description="Font size for total weight sum display", 
-            default=12, min=8, max=64
-        )
-        bpy.types.WindowManager.weight_overlay_color = FloatVectorProperty(
-            name="Active Vertex Group Color",
-            description="Color for active vertex group weight display",
-            default=(1.0, 1.0, 0.0, 1.0),
-            min=0.0, max=1.0, size=4, subtype='COLOR'
-        )
-        bpy.types.WindowManager.weight_overlay_total_color = FloatVectorProperty(
-            name="Total Weight Color",
-            description="Color for total weight sum display",
-            default=(0.0, 1.0, 1.0, 1.0),
-            min=0.0, max=1.0, size=4, subtype='COLOR'
-        )
-        bpy.types.WindowManager.show_total_weight = BoolProperty(
-            name="Show Total Weight",
-            description="Display total weight sum below active vertex group weight",
-            default=True
-        )
-        bpy.types.WindowManager.show_weight_limit_warning = BoolProperty(
-            name="Show Weight Limit Warning",
-            description="Highlight vertices exceeding the bone influence limit",
-            default=False,
-            update=update_show_weight_overlay # 設定変更時に描画データを更新
-        )
-        bpy.types.WindowManager.weight_limit_threshold = IntProperty(
-            name="Weight Limit Threshold",
-            description="Warning threshold for number of bone influences (e.g., 5 for Unity's 4-bone limit)",
-            default=5, min=1, max=32,
-            update=update_show_weight_overlay
-        )
-        bpy.types.WindowManager.weight_warning_color = FloatVectorProperty(
-            name="Warning Color",
-            description="Color for weight display when limit is exceeded",
-            default=(1.0, 0.0, 0.0, 1.0),
-            min=0.0, max=1.0, size=4, subtype='COLOR',
-            update=update_show_weight_overlay
-        )
-        print("Vertex Weight Viewer: Properties registered successfully")
+    wm = bpy.types.WindowManager
+    wm.show_weight_overlay = BoolProperty(name="Show", default=True, update=update_toggle)
+    wm.show_total_weight = BoolProperty(name="Total", default=True)
+    
+    wm.weight_overlay_font_size = IntProperty(name="FSize", default=14)
+    wm.weight_overlay_total_font_size = IntProperty(name="TSize", default=12)
+    wm.weight_overlay_color = FloatVectorProperty(name="C", default=(1,1,0,1), subtype='COLOR', size=4)
+    wm.weight_overlay_total_color = FloatVectorProperty(name="TC", default=(0,1,1,1), subtype='COLOR', size=4)
+    
+    wm.show_weight_limit_warning = BoolProperty(name="Warn", default=False)
+    wm.weight_limit_threshold = IntProperty(name="Thresh", default=4, min=1)
+    wm.weight_warning_color = FloatVectorProperty(name="WCol", default=(1,0,0,1), subtype='COLOR', size=4)
 
-        # デフォルト値を確実に設定（既存の設定がある場合も更新）
-        wm = bpy.context.window_manager
-        if not hasattr(wm, "weight_overlay_font_size") or wm.weight_overlay_font_size == 16:
-            # 16pxから14pxへの移行、または初回設定
-            wm.weight_overlay_font_size = 14
-        
-        # 初期化時に確実にハンドラを登録
-        register_draw_handler()
-        
-        # ファイル読み込み時やリロード時のイベントハンドラを追加
-        bpy.app.handlers.load_post.append(on_file_loaded)
-        bpy.app.handlers.depsgraph_update_post.append(on_scene_update)
-        print("Vertex Weight Viewer: Event handlers registered successfully")
-        
-        print("Vertex Weight Viewer: Registration completed successfully")
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Registration failed: {type(e).__name__}: {str(e)}")
-        import traceback
-        print(f"Stack trace: {traceback.format_exc()}")
+    bpy.utils.register_class(VIEW3D_PT_weight_overlay)
+    bpy.app.handlers.load_post.append(on_load)
+    
+    # Init
+    try:
+        if hasattr(bpy.context.window_manager, "show_weight_overlay") and bpy.context.window_manager.show_weight_overlay:
+            core.start_session(bpy.context)
+    except: pass
 
 def unregister():
-    try:
-        print("Vertex Weight Viewer: Starting unregistration")
-        
-        unregister_draw_handler()
-        
-        # イベントハンドラを削除
-        try:
-            if on_file_loaded in bpy.app.handlers.load_post:
-                bpy.app.handlers.load_post.remove(on_file_loaded)
-            if on_scene_update in bpy.app.handlers.depsgraph_update_post:
-                bpy.app.handlers.depsgraph_update_post.remove(on_scene_update)
-            print("Vertex Weight Viewer: Event handlers removed successfully")
-        except Exception as e:
-            print(f"Vertex Weight Viewer: Error removing event handlers: {type(e).__name__}: {str(e)}")
-        
-        # プロパティを削除
-        try:
-            if hasattr(bpy.types.WindowManager, 'show_weight_overlay'):
-                del bpy.types.WindowManager.show_weight_overlay
-            if hasattr(bpy.types.WindowManager, 'weight_overlay_font_size'):
-                del bpy.types.WindowManager.weight_overlay_font_size
-            if hasattr(bpy.types.WindowManager, 'weight_overlay_total_font_size'):
-                del bpy.types.WindowManager.weight_overlay_total_font_size
-            if hasattr(bpy.types.WindowManager, 'weight_overlay_color'):
-                del bpy.types.WindowManager.weight_overlay_color
-            if hasattr(bpy.types.WindowManager, 'weight_overlay_total_color'):
-                del bpy.types.WindowManager.weight_overlay_total_color
-            if hasattr(bpy.types.WindowManager, 'show_total_weight'):
-                del bpy.types.WindowManager.show_total_weight
-            if hasattr(bpy.types.WindowManager, 'show_weight_limit_warning'):
-                del bpy.types.WindowManager.show_weight_limit_warning
-            if hasattr(bpy.types.WindowManager, 'weight_limit_threshold'):
-                del bpy.types.WindowManager.weight_limit_threshold
-            if hasattr(bpy.types.WindowManager, 'weight_warning_color'):
-                del bpy.types.WindowManager.weight_warning_color
-            print("Vertex Weight Viewer: Properties removed successfully")
-        except Exception as e:
-            print(f"Vertex Weight Viewer: Error removing properties: {type(e).__name__}: {str(e)}")
-        
-        # UIクラスを削除
-        try:
-            bpy.utils.unregister_class(VIEW3D_PT_weight_overlay)
-            print("Vertex Weight Viewer: UI panel unregistered successfully")
-        except Exception as e:
-            print(f"Vertex Weight Viewer: Error unregistering UI classes: {type(e).__name__}: {str(e)}")
-        
-        print("Vertex Weight Viewer: Unregistration completed")
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Unregistration failed: {type(e).__name__}: {str(e)}")
-        import traceback
-        print(f"Stack trace: {traceback.format_exc()}")
+    core.stop_session()
+    if on_load in bpy.app.handlers.load_post: bpy.app.handlers.load_post.remove(on_load)
+    bpy.utils.unregister_class(VIEW3D_PT_weight_overlay)
+    
+    wm = bpy.types.WindowManager
+    del wm.show_weight_overlay
+    # ... cleanup ...
 
 if __name__ == "__main__":
-    try:
-        register()
-    except Exception as e:
-        print(f"Vertex Weight Viewer: Failed to register addon: {type(e).__name__}: {str(e)}")
-        print("This may indicate missing Blender modules or an incompatible environment.")
-        print(f"Stack trace: {traceback.format_exc()}")
+    register()
