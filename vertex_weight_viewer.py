@@ -61,6 +61,9 @@ def update_draw_data():
             'total_font_size': getattr(context.window_manager, 'weight_overlay_total_font_size', 12),
             'color': getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0)),
             'total_color': getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0)),
+            'show_warning': getattr(context.window_manager, 'show_weight_limit_warning', False),
+            'warning_threshold': getattr(context.window_manager, 'weight_limit_threshold', 5),
+            'warning_color': getattr(context.window_manager, 'weight_warning_color', (1.0, 0.0, 0.0, 1.0)),
         }
         
     except (AttributeError, TypeError):
@@ -330,6 +333,14 @@ def draw_callback_px(*args):
             total_font_size = getattr(context.window_manager, 'weight_overlay_total_font_size', 12)
             color = getattr(context.window_manager, 'weight_overlay_color', (1.0, 1.0, 0.0, 1.0))
             total_color = getattr(context.window_manager, 'weight_overlay_total_color', (0.0, 1.0, 1.0, 1.0))
+            show_warning = getattr(context.window_manager, 'show_weight_limit_warning', False)
+            warning_threshold = getattr(context.window_manager, 'weight_limit_threshold', 5)
+            warning_color = getattr(context.window_manager, 'weight_warning_color', (1.0, 0.0, 0.0, 1.0))
+
+        if _cached_draw_data is not None:
+             show_warning = _cached_draw_data.get('show_warning', False)
+             warning_threshold = _cached_draw_data.get('warning_threshold', 5)
+             warning_color = _cached_draw_data.get('warning_color', (1.0, 0.0, 0.0, 1.0))
 
         # Get mesh data
         if obj.mode == 'EDIT':
@@ -394,22 +405,56 @@ def draw_callback_px(*args):
                 if active_weight == 0.0 and (not show_total_weight or total_weight == 0.0):
                     continue
 
+                # インフルエンス数（有効なウェイト数）をカウント
+                influence_count = 0
+                if show_warning:
+                    # ゼロより大きいウェイトを持つグループをカウント
+                    influence_count = sum(1 for group in v.groups if group.weight > 0.001)
+
                 co_world = matrix_world @ v.co
                 co_2d = bpy_extras.view3d_utils.location_3d_to_region_2d(region, rv3d, co_world)
                 if co_2d:
-                    # Active Weightを大きく上に表示
+                    # Active Weight表示
                     if vg_index is not None and active_weight > 0.0:
                         blf.size(font_id, font_size)
-                        blf.color(font_id, *color)
+                        
+                        # 警告判定: インフルエンス数が閾値以上なら赤字＆太字
+                        is_warning = show_warning and influence_count >= warning_threshold
+                        draw_color = warning_color if is_warning else color
+                        
+                        blf.color(font_id, *draw_color)
+                        
+                        if is_warning:
+                            # フェイクボールド（重ね書き）で太字表現
+                            offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+                            for ox, oy in offsets:
+                                blf.position(font_id, co_2d.x + ox, co_2d.y + oy, 0)
+                                blf.draw(font_id, f"{active_weight:.2f}")
+                        
+                        # メイン描画
                         blf.position(font_id, co_2d.x, co_2d.y, 0)
                         blf.draw(font_id, f"{active_weight:.2f}")
                     
                     # Total Weightを小さく下に表示（Show Total Weightがオンの場合のみ）
                     if show_total_weight and total_weight > 0.0:
                         blf.size(font_id, total_font_size)
-                        blf.color(font_id, *total_color)
+                        
+                        # Total Weightも警告対象とするか？ -> 現在はActive Weight同様に色を変える
+                        is_warning = show_warning and influence_count >= warning_threshold
+                        draw_color = warning_color if is_warning else total_color
+                        
+                        blf.color(font_id, *draw_color)
+                        
                         # Active Weightが表示されている場合は、その下に表示
                         y_offset = -font_size - 2 if (vg_index is not None and active_weight > 0.0) else 0
+                        
+                        if is_warning:
+                            # フェイクボールド
+                            offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+                            for ox, oy in offsets:
+                                blf.position(font_id, co_2d.x + ox, co_2d.y + y_offset + oy, 0)
+                                blf.draw(font_id, f"{total_weight:.2f}")
+
                         blf.position(font_id, co_2d.x, co_2d.y + y_offset, 0)
                         blf.draw(font_id, f"{total_weight:.2f}")
             except Exception as e:
@@ -467,7 +512,21 @@ class VIEW3D_PT_weight_overlay(Panel):
             box.label(text="Colors:")
             box.prop(wm, "weight_overlay_color", text="Active Vertex Group Color")
             if wm.show_total_weight:
-                box.prop(wm, "weight_overlay_total_color", text="Total Weight Color")
+            layout.prop(wm, "weight_overlay_total_color", text="Total Weight Color")
+            
+            layout.separator()
+            
+            # インフルエンス数警告設定
+            box = layout.box()
+            box.prop(wm, "show_weight_limit_warning", text="Show Weight Limit Warning")
+            if wm.show_weight_limit_warning:
+                # 閾値設定 (Unity標準は4なので、5以上で警告する設定が一般的)
+                box.prop(wm, "weight_limit_threshold", text="Warning Threshold")
+                box.prop(wm, "weight_warning_color", text="Warning Color")
+                
+                # ヘルプテキスト的なものを表示
+                row = box.row()
+                row.label(text=f"Warning when Influences >= {wm.weight_limit_threshold}", icon='INFO')
 
 def register_draw_handler():
     global _handle
@@ -592,6 +651,25 @@ def register():
             description="Display total weight sum below active vertex group weight",
             default=True
         )
+        bpy.types.WindowManager.show_weight_limit_warning = BoolProperty(
+            name="Show Weight Limit Warning",
+            description="Highlight vertices exceeding the bone influence limit",
+            default=False,
+            update=update_show_weight_overlay # 設定変更時に描画データを更新
+        )
+        bpy.types.WindowManager.weight_limit_threshold = IntProperty(
+            name="Weight Limit Threshold",
+            description="Warning threshold for number of bone influences (e.g., 5 for Unity's 4-bone limit)",
+            default=5, min=1, max=32,
+            update=update_show_weight_overlay
+        )
+        bpy.types.WindowManager.weight_warning_color = FloatVectorProperty(
+            name="Warning Color",
+            description="Color for weight display when limit is exceeded",
+            default=(1.0, 0.0, 0.0, 1.0),
+            min=0.0, max=1.0, size=4, subtype='COLOR',
+            update=update_show_weight_overlay
+        )
         print("Vertex Weight Viewer: Properties registered successfully")
 
         # デフォルト値を確実に設定（既存の設定がある場合も更新）
@@ -644,6 +722,12 @@ def unregister():
                 del bpy.types.WindowManager.weight_overlay_total_color
             if hasattr(bpy.types.WindowManager, 'show_total_weight'):
                 del bpy.types.WindowManager.show_total_weight
+            if hasattr(bpy.types.WindowManager, 'show_weight_limit_warning'):
+                del bpy.types.WindowManager.show_weight_limit_warning
+            if hasattr(bpy.types.WindowManager, 'weight_limit_threshold'):
+                del bpy.types.WindowManager.weight_limit_threshold
+            if hasattr(bpy.types.WindowManager, 'weight_warning_color'):
+                del bpy.types.WindowManager.weight_warning_color
             print("Vertex Weight Viewer: Properties removed successfully")
         except Exception as e:
             print(f"Vertex Weight Viewer: Error removing properties: {type(e).__name__}: {str(e)}")
