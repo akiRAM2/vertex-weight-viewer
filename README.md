@@ -3,7 +3,7 @@
 Advanced vertex weight overlay tool designed.
 Displays active vertex weights and total weight sums directly in the 3D viewport, with support for weight limit warnings.
 
-![Vertex Weight Viewer Demo](https://github.com/akiRAM2/vertex-weight-viewer/assets/demo_image.png)
+<img width="1584" height="867" alt="image" src="https://github.com/user-attachments/assets/4eeddaf0-99f9-4392-adba-c5a8a82a2f36" />
 
 ## ✨ Features
 
